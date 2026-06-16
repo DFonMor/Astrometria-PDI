@@ -41,7 +41,7 @@ def processar_imagem(caminho_arquivo):
     
     print("[3/7] Detectando estrelas...")
     estrelas = detectar_estrelas(imagem_proc)
-    print(f"     → {len(estrelas)} estrelas detectadas")
+    print(f"     → {len(estrelas)} estrelas selecionadas")
     
     if len(estrelas) < 5:
         print("     → ⚠️ Poucas estrelas detectadas. Abortando.")
