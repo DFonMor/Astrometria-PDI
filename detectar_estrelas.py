@@ -10,6 +10,10 @@ Funcionalidades:
     - Operações morfológicas para limpeza (abertura/fechamento)
     - Rotulação para identificar objetos individuais
     - Extração de centroides, fluxos e áreas
+
+Autor: Eduardo Fonseca Morato
+Contato: morato@alunos.utfpr.edu.br
+Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import numpy as np
