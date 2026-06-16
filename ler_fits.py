@@ -1,7 +1,7 @@
 """
 ler_fits.py - Módulo para leitura de arquivos FITS
 
-Este módulo é responsável pela aquisição da imagem (Bloco 1 do pipeline).
+Este módulo é responsável pela aquisição da imagem.
 Conceitos da disciplina: Aquisição e representação de imagens digitais.
 
 Funcionalidades:
@@ -96,6 +96,10 @@ def normalizar_imagem(imagem):
     Returns:
         numpy.ndarray: Imagem normalizada no intervalo [0, 1]
     """
+
+    if imagem.dtype != np.float64:
+        imagem = imagem.astype(np.float64)
+
     r_min = np.min(imagem)
     r_max = np.max(imagem)
     

@@ -2,9 +2,9 @@
 constants.py - Parâmetros constantes do sistema de astrometria
 
 Este arquivo contém todas as configurações fixas do projeto:
-- Parâmetros do telescópio Seestar S50
-- Configurações do algoritmo (detecção, extração, matching)
-- Parâmetros para leitura dos índices do astrometry.net
+    - Parâmetros do telescópio Seestar S50
+    - Configurações do algoritmo (detecção, extração, matching)
+    - Parâmetros para leitura dos índices do astrometry.net
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
