@@ -35,6 +35,7 @@ Por fim, parâmetros de qualidade e calibração impactam indiretamente a astrom
 
 #### Exemplo de cabeçalho de imagem FITS
 
+```fits
 SIMPLE = T
 BITPIX = 16
 NAXIS = 2
@@ -56,6 +57,7 @@ DATE-OBS= '2024-10-05T02:30:45.123'
 EXPTIME = 120.0
 GAIN = 1.5 / e-/ADU
 SATURATE= 50000 / ADU
+```
 
 ### Requisitos Funcionais
 
