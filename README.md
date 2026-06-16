@@ -19,7 +19,7 @@ Dada uma imagem do céu estrelado em formato .fits (comum para imagem astronômi
 
 ### Imagens FITS (Flexible Image Transport System)
 
-O formato FITS é o padrão utilizado em astronomia para armazenar tanto os dados da imagem (matriz de pixels) quanto os metadados associados, como coordenadas celestes, data da observação, tempo de exposição, entre outros. Diferentemente de formatos comuns como JPEG ou PNG, que guardam valores prontos para exibição em um monitor, o FITS armazena contagens de fótons ou densidade de fluxo de forma linear. Essa linearidade é essencial para aplicações científicas como fotometria (medição de brilho) e astrometria (medição precisa de posições).
+O formato FITS é o padrão utilizado em astronomia para armazenar tanto os dados da imagem (matriz de pixels) quanto os metadados associados, como coordenadas celestes, data da observação, tempo de exposição, entre outros. Diferentemente de formatos comuns como JPEG ou PNG, que guardam valores prontos para exibição em um monitor de forma logarítmica, o FITS armazena contagens de fótons ou densidade de fluxo de forma linear. Essa linearidade é essencial para aplicações científicas como fotometria (medição de brilho) e astrometria (medição precisa de posições).
 
 Uma imagem FITS típica é composta por duas partes principais: o cabeçalho (header), formado por cartões de 80 caracteres no formato `KEYWORD = value / comment`, e o array de dados, que é uma matriz numérica representando o sinal detectado por cada pixel. Os valores são geralmente armazenados como inteiros de 16 ou 32 bits, ou floats de 32/64 bits.
 
