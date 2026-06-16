@@ -17,6 +17,46 @@ As informações de entrada, além da própria imagem, são o local e hora em qu
 
 Dada uma imagem do céu estrelado em formato .fits (comum para imagem astronômicas), identificar qual região do céu foi fotografada, comparando com uma base de dados de imagens de referência previamente catalogadas. O algoritmo apresentado nesse projeto considerará como entrada imagens utilizando um mesmo conjunto de câmera + telescópio. Essa decisão foi tomada considerando que o presente projeto será reutilizado futuramente durante o Trabalho de Conclusão de Curso de Engenharia Mecatrônica para o desenvolvimento de um telescópio inteligente.
 
+### Imagens FITS (Flexible Image Transport System)
+
+O formato FITS é o padrão utilizado em astronomia para armazenar tanto os dados da imagem (matriz de pixels) quanto os metadados associados, como coordenadas celestes, data da observação, tempo de exposição, entre outros. Diferentemente de formatos comuns como JPEG ou PNG, que guardam valores prontos para exibição em um monitor, o FITS armazena contagens de fótons ou densidade de fluxo de forma linear. Essa linearidade é essencial para aplicações científicas como fotometria (medição de brilho) e astrometria (medição precisa de posições).
+
+Uma imagem FITS típica é composta por duas partes principais: o cabeçalho (header), formado por cartões de 80 caracteres no formato `KEYWORD = value / comment`, e o array de dados, que é uma matriz numérica representando o sinal detectado por cada pixel. Os valores são geralmente armazenados como inteiros de 16 ou 32 bits, ou floats de 32/64 bits.
+
+#### Parâmetros retirados dessas imagens
+
+Para medir posições celestes com precisão (por exemplo, determinar as coordenadas de um asteróide ou estrela variável), o software astrométrico necessita de um conjunto mínimo de palavras-chave no cabeçalho FITS. O mais importante é o sistema WCS (*World Coordinate System*), que transforma coordenadas de pixel em coordenadas celestes reais, como Ascensão Reta (RA) e Declinação (Dec). As palavras-chave fundamentais do WCS incluem: `CTYPE1` e `CTYPE2` (definem o tipo de coordenada e projeção, como `'RA---TAN'` para projeção gnomônica), `CRPIX1` e `CRPIX2` (ponto de referência em pixels, geralmente o centro da imagem), `CRVAL1` e `CRVAL2` (coordenadas celestes nesse ponto de referência) e a matriz `CD1_1`, `CD1_2`, `CD2_1`, `CD2_2` (que define escala, rotação e cisalhamento da imagem). Com esses parâmetros, cada pixel pode ser convertido em uma coordenada astronômica precisa.
+
+Para astrometria de corpos móveis (asteróides, planetas, cometas), a referência temporal é tão crítica quanto a espacial. Os principais parâmetros relacionados ao tempo são: `DATE-OBS` (data e hora do início da exposição, no formato ISO como `2024-10-05T02:30:45.123`), `EXPTIME` (tempo de exposição em segundos, para calcular o meio exato da exposição), `MJD-OBS` (a mesma informação em *Modified Julian Date*, formato preferido para cálculos orbitais) e `TIMESYS` (sistema de tempo utilizado, normalmente `UTC`, mas para precisão sub-arcosegundo é necessário corrigir para `TT` – Tempo Terrestre).
+
+Outro conjunto de parâmetros importantes define o sistema de coordenadas e sua época. A palavra-chave `RADESYS` indica o sistema de referência celeste, sendo `ICRS` (*International Celestial Reference System*) o padrão atual, enquanto imagens mais antigas podem usar `FK5` ou `FK4`. `EQUINOX` define a época do equinócio (ex.: `2000.0` para J2000.0), essencial para comparar posições com catálogos de diferentes épocas.
+
+Por fim, parâmetros de qualidade e calibração impactam indiretamente a astrometria, pois ruído ou pixels defeituosos degradam a precisão na medição do centróide da estrela. As palavras-chave `GAIN` (conversão entre unidades ADU e elétrons reais), `READNOIS` (ruído de leitura do CCD) e `SATURATE` (valor de pixel acima do qual o detector está saturado) são fundamentais para calcular incertezas e evitar o uso de estrelas saturadas, que fornecem posições imprecisas.
+
+#### Exemplo de cabeçalho de imagem FITS
+
+SIMPLE = T
+BITPIX = 16
+NAXIS = 2
+NAXIS1 = 2048
+NAXIS2 = 2048
+CTYPE1 = 'RA---TAN' / Projeção Tangencial para RA
+CTYPE2 = 'DEC--TAN' / Projeção Tangencial para Dec
+CRPIX1 = 1024.5 / Pixel central X
+CRPIX2 = 1024.5 / Pixel central Y
+CRVAL1 = 150.123456 / RA do centro em graus (10h00m29.6s)
+CRVAL2 = -30.987654 / Dec do centro em graus
+CD1_1 = -0.0001388889 / ~0.5 arcsec por pixel
+CD1_2 = 0.00000345 / Termo de rotação (pequeno)
+CD2_1 = -0.00000345
+CD2_2 = 0.0001388889
+RADESYS = 'ICRS' / Sistema de referência
+EQUINOX = 2000.0
+DATE-OBS= '2024-10-05T02:30:45.123'
+EXPTIME = 120.0
+GAIN = 1.5 / e-/ADU
+SATURATE= 50000 / ADU
+
 ### Requisitos Funcionais
 
 1. Ler arquivos no formato .fits;
