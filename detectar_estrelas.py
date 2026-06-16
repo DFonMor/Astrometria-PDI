@@ -77,6 +77,9 @@ def detectar_estrelas(imagem, config=None):
                                    max_area=config['max_star_area'],
                                    min_flux=config['min_flux'])
     
+    # Seleciona as N mais brilhantes (AQUI!)
+    estrelas = selecionar_estrelas_brilhantes(estrelas, config['num_stars'])
+
     return estrelas
 
 
