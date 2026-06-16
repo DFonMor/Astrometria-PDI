@@ -17,6 +17,7 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 
 import numpy as np
 from astropy.io import fits
+from astropy.io.fits import ImageHDU
 
 
 def carregar_imagem(caminho_arquivo):
@@ -38,13 +39,6 @@ def carregar_imagem(caminho_arquivo):
     Raises:
         FileNotFoundError: Se o arquivo não existir
         ValueError: Se o arquivo não for um FITS válido ou não tiver dados 2D
-    
-    Exemplo:
-        >>> imagem, header = carregar_imagem("orion.fits")
-        >>> print(imagem.shape)
-        (1080, 1920)
-        >>> print(header.get('EXPTIME'))
-        30.0
     """
     
     # Verifica se o arquivo existe
@@ -56,11 +50,14 @@ def carregar_imagem(caminho_arquivo):
     # O contexto 'with' garante que o arquivo seja fechado corretamente
     with fits.open(caminho_arquivo) as hdul:
         
+        # Pega o primeiro HDU (Header Data Unit)
+        imagem_hdu: ImageHDU = hdul[0] # type: ignore
+
         # O primeiro extension (HDUL[0]) contém os dados da imagem
-        dados_raw = hdul[0].data
+        dados_raw = imagem_hdu.data 
         
         # Extrai o cabeçalho (metadados) como dicionário
-        cabecalho = dict(hdul[0].header)
+        cabecalho = dict(imagem_hdu.header) 
         
         # Verifica se os dados são 2D (imagem) e não 1D ou 3D
         if dados_raw is None:
@@ -86,9 +83,12 @@ def normalizar_imagem(imagem):
     Esta é uma transformação ponto-a-ponto (conceito da Aula 03).
     A normalização preserva as relações relativas entre os pixels
     enquanto permite operações consistentes.
+
+    Diferente de imagens JPEG/PNG, os dados FITS são lineares e devem
+    ser preservados como tal para análises científicas (como astrometria).
     
     A fórmula utilizada é: S = (r - r_min) / (r_max - r_min)
-    (conforme slide 7 da Aula 03)
+    (conforme visto em sala na Aula 03)
     
     Args:
         imagem (numpy.ndarray): Imagem de entrada (qualquer escala)
@@ -110,13 +110,10 @@ def obter_metadado_importante(cabecalho, chave, valor_padrao=None):
     """
     Extrai um metadado específico do cabeçalho FITS de forma segura.
     
-    Alguns metadados úteis para astrometria:
-        - 'NAXIS1', 'NAXIS2': dimensões da imagem
+    Alguns metadados úteis para esse projeto:
         - 'EXPTIME': tempo de exposição
         - 'DATE-OBS': data da observação
         - 'RA', 'DEC': coordenadas aproximadas (se disponíveis)
-        - 'FOCALLEN': distância focal (se registrada)
-        - 'PIXSIZE': tamanho do pixel (se registrada)
     
     Args:
         cabecalho (dict): Cabeçalho FITS
@@ -151,6 +148,16 @@ def exibir_info_imagem(imagem, cabecalho):
     date_obs = obter_metadado_importante(cabecalho, 'DATE-OBS')
     if date_obs:
         print(f"  Data da observação: {date_obs}")
+
+    ra = obter_metadado_importante(cabecalho, 'RA')
+    if ra:
+        print(f"  Ascenção Reta pelo cabeçalho: {ra}")
+        ra = obter_metadado_importante(cabecalho, 'RA')
+
+    dec = obter_metadado_importante(cabecalho, 'DEC')
+    if dec:
+        print(f"  Declinação pelo cabeçalho: {dec}")
+        dec = obter_metadado_importante(cabecalho, 'DEC')
 
 
 # ============================================================================
