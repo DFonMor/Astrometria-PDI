@@ -51,6 +51,7 @@ def detectar_estrelas(imagem, config=None):
     # Configurações padrão
     if config is None:
         config = {
+            'num_stars': 40,
             'otsu_sensitivity': 1.0,
             'morph_open_size': 3,
             'morph_close_size': 3,
@@ -198,7 +199,7 @@ def extrair_propriedades(imagem, objetos, min_area=3, max_area=50, min_flux=0.01
         
         # Filtra por fluxo (intensidade acumulada)
         # Usa a média de intensidade * área
-        fluxo = prop.mean_intensity * area
+        fluxo = prop.intensity_mean * area
         if fluxo < min_flux:
             continue
         
@@ -287,8 +288,18 @@ if __name__ == "__main__":
             img_raw, header = carregar_imagem(caminho_teste)
             img_proc = pre_processar(img_raw)
             
+            config_deteccao = {
+                'num_stars': 40,
+                'otsu_sensitivity': 1.0,
+                'morph_open_size': 3,
+                'morph_close_size': 3,
+                'min_star_area': 3,
+                'max_star_area': 50,
+                'min_flux': 0.01,
+            }
+
             # Detecta estrelas
-            estrelas = detectar_estrelas(img_proc)
+            estrelas = detectar_estrelas(img_proc, config_deteccao) 
             exibir_info_deteccao(estrelas)
             
             if estrelas:
