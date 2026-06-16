@@ -168,7 +168,6 @@ def exibir_info_processamento(imagem_original, imagem_processada):
 if __name__ == "__main__":
     import sys
     from ler_fits import carregar_imagem
-    import matplotlib
     
     
     if len(sys.argv) > 1:
