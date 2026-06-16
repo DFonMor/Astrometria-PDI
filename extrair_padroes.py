@@ -1,15 +1,15 @@
 """
-extrair_padroes.py - Módulo para extração de padrões geométricos (triângulos)
+extrair_padroes.py - Módulo para extração de padrões geométricos (quads)
 
 Este módulo é responsável pela: Extração de atributos e geração de 
 padrões invariantes. Conceitos da disciplina: Reconhecimento de padrões e 
 invariância geométrica.
 
 Funcionalidades:
-    - Seleção das N estrelas mais brilhantes
-    - Geração de triângulos a partir de combinações de 3 estrelas
-    - Cálculo de distâncias normalizadas entre pares
-    - Criação de hash (chave) para cada triângulo
+    - Seleção das N estrelas mais brilhantes (MÁXIMO 50)
+    - Geração de quads a partir de combinações de 4 estrelas
+    - Cálculo do hash (4 índices das estrelas)
+    - Controle de memória para evitar crash
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
@@ -17,18 +17,20 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import numpy as np
+import math
 from itertools import combinations
+import gc  # Garbage collector para liberar memória
 
 
 def extrair_padroes(estrelas, config=None):
     """
-    Extrai padrões (triângulos) a partir das estrelas detectadas.
+    Extrai padrões (quads) a partir das estrelas detectadas.
     
     Pipeline:
-        1. Gera todas as combinações de 3 estrelas (triângulos)
-        2. Para cada triângulo, calcula as 3 distâncias entre pares
-        3. Normaliza as distâncias pelo maior lado (invariância a escala)
-        4. Cria um hash (chave) para busca no banco de dados
+        1. Seleciona as N estrelas mais brilhantes (limitado a 50)
+        2. Gera todas as combinações de 4 estrelas (quads)
+        3. Para cada quad, o hash é o próprio conjunto de 4 índices
+        4. Filtra quads com estrelas muito próximas/distantes
     
     Args:
         estrelas (list): Lista de estrelas detectadas (ordenadas por brilho)
@@ -36,110 +38,248 @@ def extrair_padroes(estrelas, config=None):
     
     Returns:
         list: Lista de dicionários, cada um contendo:
-              - hash (str): Chave identificadora (ex: "0.45_0.67_0.89")
-              - vertices (list): Índices das 3 estrelas
-              - lados (list): Distâncias normalizadas [d1, d2, d3]
-              - lados_abs (list): Distâncias em pixels [d1, d2, d3]
-              - area (float): Área do triângulo (normalizada)
+              - hash (tuple): Chave = (star1, star2, star3, star4)
+              - vertices (list): Índices das 4 estrelas
+              - estrelas (list): Os objetos estrela completos
+              - area (float): Área do quad (opcional)
     """
     
-    # Configurações padrão
+    # Configurações padrão com limites de segurança
     if config is None:
         config = {
-            'num_stars': 40,           # Número de estrelas mais brilhantes
-            'hash_precision': 2,       # Casas decimais para discretização
-            'normalize': True,         # Normalizar distâncias pelo maior lado
-            'min_distance': 10.0,      # Distância mínima entre estrelas (pixels)
-            'max_distance': 500.0,     # Distância máxima entre estrelas (pixels)
+            'num_stars': 40,            # Número de estrelas (MAX: 50 por segurança)
+            'max_quads': 100000,        # Máximo de quads a gerar
+            'sample_quads': False,      # Se True, amostra aleatória se exceder max_quads
+            'min_distance': 10.0,       # Distância mínima entre estrelas (pixels)
+            'max_distance': 500.0,      # Distância máxima entre estrelas (pixels)
+            'max_stars_absolute': 50,   # LIMITE ABSOLUTO: nunca usar mais que isso
         }
     
-    # Seleciona as N estrelas mais brilhantes
+    # LIMITE DE SEGURANÇA: nunca usar mais que 50 estrelas
+    max_stars = min(config['num_stars'], config['max_stars_absolute'])
     
-    # Gera triângulos a partir das combinações
-    triangulos = gerar_triangulos(estrelas, config)
+    # Seleciona as N estrelas mais brilhantes (limitado)
+    estrelas_brilhantes = selecionar_estrelas(estrelas, max_stars)
     
-    return triangulos
+    if len(estrelas_brilhantes) < 4:
+        print(f"⚠️ Apenas {len(estrelas_brilhantes)} estrelas disponíveis. Mínimo: 4")
+        return []
+    
+    # Gera quads com controle de memória
+    quads = gerar_quads_com_controle(estrelas_brilhantes, config)
+    
+    return quads
 
-def gerar_triangulos(estrelas, config):
+
+def selecionar_estrelas(estrelas, num_stars):
     """
-    Gera triângulos a partir de combinações de 3 estrelas.
+    Seleciona as N estrelas mais brilhantes (com limite de segurança).
     
-    Conceito: 
-        - Triângulos são invariantes a rotação e translação
-        - Com normalização, tornam-se invariantes a escala
-        - O hash permite busca rápida no banco de dados
+    Args:
+        estrelas (list): Lista de estrelas (já ordenadas por brilho)
+        num_stars (int): Número de estrelas a selecionar (MÁX: 50)
+    
+    Returns:
+        list: Lista com as N estrelas mais brilhantes
+    """
+    # Garante que nunca ultrapasse o limite
+    num_stars = min(num_stars, 50)
+    
+    if len(estrelas) <= num_stars:
+        return estrelas
+    return estrelas[:num_stars]
+
+
+def gerar_quads_com_controle(estrelas, config):
+    """
+    Gera quads com controle de memória e progresso.
     
     Args:
         estrelas (list): Lista de estrelas
-        config (dict): Configurações com parâmetros
+        config (dict): Configurações
     
     Returns:
-        list: Lista de dicionários representando triângulos
+        list: Lista de quads
     """
     num_estrelas = len(estrelas)
     
-    if num_estrelas < 3:
-        return []
+    # Calcula total de combinações
+    total_combinacoes = math.comb(num_estrelas, 4)
     
-    # Limite máximo de combinações para evitar explosão computacional
-    # C(40, 3) = 9880 triângulos, aceitável
-    if num_estrelas > 50:
-        print(f"⚠️ Muitas estrelas ({num_estrelas}), usando apenas as 50 mais brilhantes")
-        estrelas = estrelas[:50]
-        num_estrelas = 50
+    print(f"  Gerando quads de {num_estrelas} estrelas...")
+    print(f"    Total de combinações: {total_combinacoes:,}")
     
-    triangulos = []
-    indices = list(range(num_estrelas))
+    # Limites de segurança
+    max_quads = config.get('max_quads', 100000)
+    sample_quads = config.get('sample_quads', False)
     
-    # Gera todas as combinações de 3 estrelas
-    for i, j, k in combinations(indices, 3):
-        # Obtém coordenadas das 3 estrelas
-        p1 = (estrelas[i]['x'], estrelas[i]['y'])
-        p2 = (estrelas[j]['x'], estrelas[j]['y'])
-        p3 = (estrelas[k]['x'], estrelas[k]['y'])
+    # Verifica se o número de combinações é excessivo
+    if total_combinacoes > max_quads:
+        print(f"    ⚠️ Combinações excedem limite de {max_quads:,}")
         
-        # Calcula distâncias entre pares
+        if sample_quads:
+            print(f"    → Amostrando aleatoriamente {max_quads:,} quads")
+            return gerar_quads_amostrados(estrelas, config, total_combinacoes, max_quads)
+        else:
+            # Reduz o número de estrelas
+            novas_estrelas = estrelas[:int(np.floor(num_estrelas * 0.9))]
+            print(f"    → Reduzindo para {len(novas_estrelas)} estrelas e tentando novamente...")
+            return gerar_quads_com_controle(novas_estrelas, config)
+    
+    # Geração completa (com barra de progresso)
+    return gerar_quads_completo(estrelas, config, total_combinacoes)
+
+
+def gerar_quads_completo(estrelas, config, total_combinacoes):
+    """
+    Gera todos os quads com barra de progresso.
+    
+    Args:
+        estrelas (list): Lista de estrelas
+        config (dict): Configurações
+        total_combinacoes (int): Número total de combinações
+    
+    Returns:
+        list: Lista de quads
+    """
+    num_estrelas = len(estrelas)
+    indices = list(range(num_estrelas))
+    quads = []
+    
+    min_dist = config['min_distance']
+    max_dist = config['max_distance']
+    
+    # Contador para progresso
+    processados = 0
+    ultimo_progresso = 0
+    
+    # Gera todas as combinações de 4 estrelas
+    for i, j, k, l in combinations(indices, 4):
+        # Atualiza progresso a cada 1000 combinações
+        processados += 1
+        if processados - ultimo_progresso >= 1000:
+            ultimo_progresso = processados
+            percentual = (processados / total_combinacoes) * 100
+            print(f"    Processando: {percentual:.1f}% ({processados:,}/{total_combinacoes:,})", end='\r')
+        
+        # Obtém coordenadas das 4 estrelas
+        s1 = estrelas[i]
+        s2 = estrelas[j]
+        s3 = estrelas[k]
+        s4 = estrelas[l]
+        
+        p1 = (s1['x'], s1['y'])
+        p2 = (s2['x'], s2['y'])
+        p3 = (s3['x'], s3['y'])
+        p4 = (s4['x'], s4['y'])
+        
+        # Calcula distâncias entre pares (para filtrar)
         d12 = distancia(p1, p2)
         d23 = distancia(p2, p3)
-        d31 = distancia(p3, p1)
+        d34 = distancia(p3, p4)
+        d41 = distancia(p4, p1)
+        d13 = distancia(p1, p3)
+        d24 = distancia(p2, p4)
         
         # Filtra distâncias inválidas
-        if (d12 < config['min_distance'] or d23 < config['min_distance'] or d31 < config['min_distance']):
+        distancias = [d12, d23, d34, d41, d13, d24]
+        if min(distancias) < min_dist or max(distancias) > max_dist:
             continue
-        if (d12 > config['max_distance'] or d23 > config['max_distance'] or d31 > config['max_distance']):
-            continue
         
-        # Ordena os lados (invariância a permutação)
-        lados = sorted([d12, d23, d31])
+        # O hash do quad é o próprio conjunto de 4 índices
+        hash_quad = (i, j, k, l)
         
-        # Normaliza pelo maior lado (invariância a escala)
-        if config['normalize']:
-            lado_max = lados[2]  # O maior após ordenação
-            if lado_max > 0:
-                lados_norm = [l / lado_max for l in lados]
-            else:
-                continue  # Triângulo degenerado
-        else:
-            lados_norm = lados
+        # Calcula área (opcional)
+        area = calcular_area_quad(p1, p2, p3, p4)
         
-        # Cria hash (discretiza os valores para busca)
-        hash_tri = criar_hash(lados_norm, config['hash_precision'])
-        
-        # Calcula área (opcional, pode ser usada para filtragem)
-        area = calcular_area(p1, p2, p3)
-        
-        triangulo = {
-            'hash': hash_tri,
-            'vertices': [i, j, k],
-            'lados': lados_norm,
-            'lados_abs': lados,
+        quad = {
+            'hash': hash_quad,
+            'vertices': [i, j, k, l],
+            'estrelas': [s1, s2, s3, s4],
             'area': area,
-            'estrelas': [estrelas[i], estrelas[j], estrelas[k]]
+            'distancias': distancias
         }
         
-        triangulos.append(triangulo)
+        quads.append(quad)
+        
+        # Libera memória periodicamente (a cada 10.000 quads)
+        if len(quads) % 10000 == 0:
+            gc.collect()
     
-    return triangulos
+    print(f"    Processando: 100.0% ({processados:,}/{total_combinacoes:,})")
+    print(f"    Quads gerados após filtragem: {len(quads):,}")
+    
+    return quads
+
+
+def gerar_quads_amostrados(estrelas, config, total_combinacoes, max_quads):
+    """
+    Gera uma amostra aleatória de quads para evitar sobrecarga.
+    
+    Args:
+        estrelas (list): Lista de estrelas
+        config (dict): Configurações
+        total_combinacoes (int): Número total de combinações
+        max_quads (int): Número máximo de quads a gerar
+    
+    Returns:
+        list: Lista de quads amostrados
+    """
+    num_estrelas = len(estrelas)
+    indices = list(range(num_estrelas))
+    quads = []
+    
+    min_dist = config['min_distance']
+    max_dist = config['max_distance']
+    
+    # Gera uma amostra aleatória de combinações
+    import random
+    random.seed(42)  # Para reprodutibilidade
+    
+    # Amostra sem repetição
+    amostra_indices = random.sample(list(combinations(indices, 4)), 
+                                   min(max_quads, total_combinacoes))
+    
+    print(f"    Amostrando {len(amostra_indices):,} quads...")
+    
+    for i, j, k, l in amostra_indices:
+        s1 = estrelas[i]
+        s2 = estrelas[j]
+        s3 = estrelas[k]
+        s4 = estrelas[l]
+        
+        p1 = (s1['x'], s1['y'])
+        p2 = (s2['x'], s2['y'])
+        p3 = (s3['x'], s3['y'])
+        p4 = (s4['x'], s4['y'])
+        
+        d12 = distancia(p1, p2)
+        d23 = distancia(p2, p3)
+        d34 = distancia(p3, p4)
+        d41 = distancia(p4, p1)
+        d13 = distancia(p1, p3)
+        d24 = distancia(p2, p4)
+        
+        distancias = [d12, d23, d34, d41, d13, d24]
+        if min(distancias) < min_dist or max(distancias) > max_dist:
+            continue
+        
+        hash_quad = (i, j, k, l)
+        area = calcular_area_quad(p1, p2, p3, p4)
+        
+        quad = {
+            'hash': hash_quad,
+            'vertices': [i, j, k, l],
+            'estrelas': [s1, s2, s3, s4],
+            'area': area,
+            'distancias': distancias
+        }
+        
+        quads.append(quad)
+    
+    print(f"    Quads amostrados após filtragem: {len(quads):,}")
+    
+    return quads
 
 
 def distancia(ponto1, ponto2):
@@ -158,58 +298,28 @@ def distancia(ponto1, ponto2):
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 
-def calcular_area(p1, p2, p3):
+def calcular_area_quad(p1, p2, p3, p4):
     """
-    Calcula a área de um triângulo usando a fórmula de Heron.
+    Calcula a área de um quadrilátero usando a fórmula do shoelace.
     
     Args:
-        p1, p2, p3 (tuple): Coordenadas dos vértices (x, y)
+        p1, p2, p3, p4 (tuple): Coordenadas dos vértices (x, y)
     
     Returns:
-        float: Área do triângulo
+        float: Área do quadrilátero
     """
-    d12 = distancia(p1, p2)
-    d23 = distancia(p2, p3)
-    d31 = distancia(p3, p1)
+    # Fórmula do shoelace para quadrilátero
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    x4, y4 = p4
     
-    # Semiperímetro
-    s = (d12 + d23 + d31) / 2.0
-    
-    # Fórmula de Heron
-    try:
-        area = np.sqrt(s * (s - d12) * (s - d23) * (s - d31))
-    except ValueError:
-        area = 0.0
+    area = 0.5 * abs(
+        x1*y2 + x2*y3 + x3*y4 + x4*y1 -
+        y1*x2 - y2*x3 - y3*x4 - y4*x1
+    )
     
     return area
-
-
-def criar_hash(lados_norm, precisao=2):
-    """
-    Cria um hash (string) a partir dos lados normalizados.
-    
-    O hash é uma string que serve como chave para busca no banco de dados.
-    A discretização (arredondamento) permite matching aproximado.
-    
-    Args:
-        lados_norm (list): Lista de 3 valores normalizados
-        precisao (int): Número de casas decimais
-    
-    Returns:
-        str: Hash no formato "d1_d2_d3"
-    
-    Exemplo:
-        >>> criar_hash([0.4567, 0.7890, 1.0], 2)
-        '0.46_0.79_1.00'
-    """
-    # Arredonda para a precisão desejada
-    lados_rounded = [round(l, precisao) for l in lados_norm]
-    
-    # Formata como string com zeros à direita
-    lados_str = [f"{l:.{precisao}f}" for l in lados_rounded]
-    
-    # Junta com underscore
-    return "_".join(lados_str)
 
 
 def exibir_info_padroes(padroes):
@@ -217,24 +327,24 @@ def exibir_info_padroes(padroes):
     Exibe informações sobre os padrões gerados (para debug).
     
     Args:
-        padroes (list): Lista de triângulos
+        padroes (list): Lista de quads
     """
     print(f"  Padrões gerados: {len(padroes)}")
     
     if padroes:
         # Amostra dos primeiros hashes
-        hashes = [p['hash'] for p in padroes[:10]]
+        hashes = [str(p['hash']) for p in padroes[:10]]
         print(f"    Hashes (amostra): {', '.join(hashes)}")
         
         # Estatísticas das distâncias
         dists = []
         for p in padroes:
-            dists.extend(p['lados'])
+            dists.extend(p['distancias'])
         
         if dists:
-            print(f"    Distâncias normalizadas: "
-                  f"min={min(dists):.3f}, max={max(dists):.3f}, "
-                  f"média={np.mean(dists):.3f}")
+            print(f"    Distâncias: "
+                  f"min={min(dists):.1f}, max={max(dists):.1f}, "
+                  f"média={np.mean(dists):.1f}")
         
         # Contagem de hashes únicos
         hashes_unicos = len(set(p['hash'] for p in padroes))
@@ -255,7 +365,7 @@ if __name__ == "__main__":
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
-        print(f"Testando extração de padrões: {caminho_teste}")
+        print(f"Testando extração de padrões (quads): {caminho_teste}")
         print("-" * 50)
         
         try:
@@ -267,35 +377,34 @@ if __name__ == "__main__":
             print(f"Estrelas detectadas: {len(estrelas)}")
             
             # Extrai padrões
-            config = {'num_stars': 40, 'hash_precision': 2}
+            config = {'num_stars': 40}
             padroes = extrair_padroes(estrelas, config)
             exibir_info_padroes(padroes)
             
-            # Mostra visualização dos triângulos (opcional)
-            if padroes and len(estrelas) >= 3:
-                # Pega os primeiros 5 triângulos para visualizar
+            # Mostra visualização dos quads (opcional)
+            if padroes and len(estrelas) >= 4:
                 import random
                 amostra = random.sample(padroes, min(5, len(padroes)))
                 
                 fig, ax = plt.subplots(1, 1, figsize=(10, 8))
                 ax.imshow(img_proc, cmap='gray')
                 
-                # Desenha os triângulos amostrados
+                # Desenha os quads amostrados
                 cores = ['red', 'blue', 'green', 'yellow', 'magenta']
-                for idx, tri in enumerate(amostra):
+                for idx, quad in enumerate(amostra):
                     cor = cores[idx % len(cores)]
-                    vertices = tri['estrelas']
+                    vertices = quad['estrelas']
                     
                     # Extrai coordenadas
                     pts = [(s['x'], s['y']) for s in vertices]
-                    pts.append(pts[0])  # Fecha o triângulo
+                    pts.append(pts[0])  # Fecha o quad
                     
                     xs, ys = zip(*pts)
                     ax.plot(xs, ys, color=cor, linewidth=1.5)
-                    ax.text(pts[0][0], pts[0][1] - 10, tri['hash'][:8], 
+                    ax.text(pts[0][0], pts[0][1] - 10, str(quad['hash'])[:8], 
                            color=cor, fontsize=8)
                 
-                ax.set_title(f'{len(padroes)} triângulos gerados (amostra de {len(amostra)})')
+                ax.set_title(f'{len(padroes)} quads gerados (amostra de {len(amostra)})')
                 plt.tight_layout()
                 plt.show()
             
