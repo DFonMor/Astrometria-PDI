@@ -2,3 +2,4 @@
 unused/
 dados.txt
 caracterizar_hdu.py
+__pycache__/
