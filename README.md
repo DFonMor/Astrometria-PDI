@@ -36,27 +36,50 @@ Por fim, parâmetros de qualidade e calibração impactam indiretamente a astrom
 #### Exemplo de cabeçalho de imagem FITS
 
 ```fits
-SIMPLE = T
-BITPIX = 16
-NAXIS = 2
-NAXIS1 = 2048
-NAXIS2 = 2048
-CTYPE1 = 'RA---TAN' / Projeção Tangencial para RA
-CTYPE2 = 'DEC--TAN' / Projeção Tangencial para Dec
-CRPIX1 = 1024.5 / Pixel central X
-CRPIX2 = 1024.5 / Pixel central Y
-CRVAL1 = 150.123456 / RA do centro em graus (10h00m29.6s)
-CRVAL2 = -30.987654 / Dec do centro em graus
-CD1_1 = -0.0001388889 / ~0.5 arcsec por pixel
-CD1_2 = 0.00000345 / Termo de rotação (pequeno)
-CD2_1 = -0.00000345
-CD2_2 = 0.0001388889
-RADESYS = 'ICRS' / Sistema de referência
-EQUINOX = 2000.0
-DATE-OBS= '2024-10-05T02:30:45.123'
-EXPTIME = 120.0
-GAIN = 1.5 / e-/ADU
-SATURATE= 50000 / ADU
+SIMPLE  =                    T / file does conform to FITS standard             
+BITPIX  =                   16 / number of bits per data pixel                  
+NAXIS   =                    3 / number of data axes                            
+NAXIS1  =                 1080 / length of data axis 1                          
+NAXIS2  =                 1920 / length of data axis 2                          
+NAXIS3  =                    3 / length of data axis 3                          
+EXTEND  =                    T / FITS dataset may contain extensions            
+COMMENT   FITS (Flexible Image Transport System) format is defined in 'Astronomy
+COMMENT   and Astrophysics', volume 376, page 359; bibcode: 2001A&A...376..359H 
+BZERO   =                32768 / offset data range to that of unsigned short    
+BSCALE  =                    1 / default scaling factor                         
+CREATOR = 'ZWO Seestar S50'    / Capture software                               
+PRODUCER= 'ZWO     '           / Powered by ZWO                                 
+XORGSUBF=                    0 / Subframe X position in binned pixels           
+YORGSUBF=                    0 / Subframe Y position in binned pixels           
+FOCALLEN=                  250 / Focal length of telescope in mm                
+APERTURE=                   5. / Name of field of view aperture                 
+EQMODE  =                    1 / Equatorial mode                                
+PROGRAM = '4.70    '           / The name of the software task that created the 
+XBINNING=                    1 / Camera X Bin                                   
+YBINNING=                    1 / Camera Y Bin                                   
+CCDXBIN =                    1 / Camera X Bin                                   
+CCDYBIN =                    1 / Camera Y Bin                                   
+XPIXSZ  =     2.90000009536743 / pixel size in microns (with binning)           
+YPIXSZ  =     2.90000009536743 / pixel size in microns (with binning)           
+IMAGETYP= 'Light   '           / Type of image                                  
+STACKCNT=                    1 / Stack frames                                   
+EXPOSURE=  0.00999999977648258 / Exposure time in seconds                       
+EXPTIME =  0.00999999977648258 / Exposure time in seconds                       
+CCD-TEMP=              24.0625 / sensor temperature in C                        
+RA      =            118.87917 / Object Right Ascension in degrees              
+DEC     =                 -0.5 / Object Declination in degrees                  
+SITELONG=             -49.3536 / longitude of the imaging site in degrees       
+SITELAT =             -25.4431 / latitude of the imaging site in degrees        
+DATE-OBS= '2025-06-05T00:39:21.574249' / Image created time                     
+FILTER  = 'IRCUT   '           / Filter used when taking image                  
+INSTRUME= 'Seestar S50'        / Camera model                                   
+BAYERPAT= 'GRBG    '           / Bayer pattern                                  
+GAIN    =                   80 / Gain Value                                     
+FOCUSPOS=                 2280 / Focuser position in steps                      
+TELESCOP= 'S50_1d568bdd'       / Telescope name                                 
+OBJECT  = 'Unknown '           / name or catalog number of object being imaged  
+TOTALEXP=  0.00999999977648258 / Total Exposure Time in seconds                 
+END                                                                             
 ```
 
 ### Requisitos Funcionais
