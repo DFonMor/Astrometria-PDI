@@ -41,13 +41,13 @@ def detectar_estrelas(imagem, config=None):
     # Configurações padrão (baseadas nos testes)
     if config is None:
         config = {
-            'fwhm': 3.0,              # Largura típica da estrela (FWHM) em pixels
-            'threshold': 3.0,         # Limiar em sigma
-            'n_brightest': 50,        # Número máximo de estrelas
-            'sharpness_range': (-1.0, 1.0),  # Faixa de nitidez
-            'roundness_range': (-1.0, 1.0),  # Faixa de circularidade
-            'box_size': 50,           # Tamanho da grade para estimativa de fundo
-            'filter_size': 3,         # Tamanho do filtro para estimativa de fundo
+            'fwhm': 3.0,
+            'threshold': 3.0,
+            'n_brightest': 50,
+            'sharpness_range': (-1.0, 1.0),
+            'roundness_range': (-1.0, 1.0),
+            'box_size': 50,
+            'filter_size': 3,
         }
     
     # ============================================================
@@ -102,7 +102,7 @@ def detectar_estrelas(imagem, config=None):
     colunas = sources.colnames
     
     for source in sources:
-        # Extrai coordenadas (usando os nomes corretos das colunas)
+        # Extrai coordenadas
         if 'x_centroid' in colunas:
             x = float(source['x_centroid'])
             y = float(source['y_centroid'])
@@ -113,7 +113,6 @@ def detectar_estrelas(imagem, config=None):
             x = float(source['x'])
             y = float(source['y'])
         else:
-            # Fallback: tenta encontrar qualquer coluna com 'x' no nome
             col_x = None
             col_y = None
             for col in colunas:
@@ -130,7 +129,7 @@ def detectar_estrelas(imagem, config=None):
         # Extrai fluxo
         fluxo = float(source['flux']) if 'flux' in colunas else 0
         
-        # Extrai área (número de pixels)
+        # Extrai área
         area = int(source['n_pixels']) if 'n_pixels' in colunas else 0
         
         # Extrai qualidade
@@ -156,9 +155,6 @@ def detectar_estrelas(imagem, config=None):
 def exibir_info_deteccao(estrelas):
     """
     Exibe informações sobre a detecção de estrelas (para debug).
-    
-    Args:
-        estrelas (list): Lista de estrelas detectadas
     """
     print(f"  Estrelas detectadas: {len(estrelas)}")
     
@@ -169,7 +165,6 @@ def exibir_info_deteccao(estrelas):
         print(f"    Top 10 fluxos: {', '.join([f'{f:.1f}' for f in fluxos])}")
         print(f"    Top 10 áreas: {', '.join([str(a) for a in areas])}")
         
-        # Estrela mais brilhante
         s = estrelas[0]
         print(f"    Mais brilhante: fluxo={s['fluxo']:.1f}, "
               f"posição=({s['x']:.1f}, {s['y']:.1f}), área={s['area']}px")
@@ -181,6 +176,8 @@ def exibir_info_deteccao(estrelas):
 
 if __name__ == "__main__":
     import sys
+    import json
+    from pathlib import Path
     import matplotlib.pyplot as plt
     from matplotlib.patches import Circle
     from ler_fits import carregar_imagem
@@ -200,10 +197,25 @@ if __name__ == "__main__":
             exibir_info_deteccao(estrelas)
             
             if estrelas:
-                # Cria versão normalizada para visualização
+                # ============================================================
+                # SALVA AS ESTRELAS DETECTADAS PARA USO NO extrair_padroes
+                # ============================================================
+                pasta_saida = Path("saidas_teste")
+                pasta_saida.mkdir(exist_ok=True)
+                
+                # Salva como JSON (legível)
+                dados_json = [{'x': s['x'], 'y': s['y'], 'fluxo': s['fluxo'], 'area': s['area']} 
+                              for s in estrelas]
+                
+                with open(pasta_saida / "estrelas_detectadas.json", 'w') as f:
+                    json.dump(dados_json, f, indent=2)
+                print(f"💾 JSON salvo: {pasta_saida / 'estrelas_detectadas.json'}")
+                
+                # ============================================================
+                # VISUALIZAÇÃO
+                # ============================================================
                 img_vis = pre_processar(img_raw)
                 
-                # Mostra resultado visual
                 fig, ax = plt.subplots(1, 1, figsize=(12, 10))
                 
                 ax.imshow(img_vis, cmap='gray', origin='lower')
@@ -218,18 +230,20 @@ if __name__ == "__main__":
                         ax.add_patch(circle)
                 
                 if estrelas:
-                        s_mais = estrelas[0]
-                        ax.plot(s_mais['x'], s_mais['y'], 'b+', markersize=12, markeredgewidth=2)  # Azul
-                        # Mostra o fluxo ao lado da estrela
-                        ax.text(s_mais['x']+15, s_mais['y']-15, f'{s_mais["fluxo"]:.1f}', 
-                        color='cyan', fontsize=11, weight='bold',
-                        bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.5))
+                    s_mais = estrelas[0]
+                    ax.plot(s_mais['x'], s_mais['y'], 'b+', markersize=12, markeredgewidth=2)
+                    ax.text(s_mais['x']+15, s_mais['y']-15, f'{s_mais["fluxo"]:.1f}', 
+                           color='cyan', fontsize=11, weight='bold',
+                           bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.5))
                 
                 ax.set_title(f'{len(estrelas)} estrelas detectadas com photutils')
                 ax.axis('off')
                 
                 plt.tight_layout()
                 plt.show()
+                
+                print("\n✅ Visualização concluída!")
+                print(f"📁 Arquivos salvos em: {pasta_saida.absolute()}")
             else:
                 print("⚠️ Nenhuma estrela detectada!")
                 
