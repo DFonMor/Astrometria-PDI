@@ -33,14 +33,24 @@ def processar_imagem(caminho_arquivo):
     
     inicio_total = time.time()
     
+    CONFIG_DETECCAO = {
+        'fwhm': 3.0,
+        'threshold': 3.0,
+        'n_brightest': 50,
+        'sharpness_range': (-1.0, 1.0),
+        'roundness_range': (-1.0, 1.0),
+        'box_size': 50,
+        'filter_size': 3,
+    }
+
     print("[1/7] Carregando imagem...")
     imagem, cabecalho = carregar_imagem(caminho_arquivo)
     
-    print("[2/7] Pré-processando imagem...")
+    print("[2/7] Pré-processando imagem...") #Para visualização apenas
     imagem_proc = pre_processar(imagem)
     
     print("[3/7] Detectando estrelas...")
-    estrelas = detectar_estrelas(imagem_proc)
+    estrelas = detectar_estrelas(imagem, CONFIG_DETECCAO)
     print(f"     → {len(estrelas)} estrelas selecionadas")
     
     if len(estrelas) < 5:
