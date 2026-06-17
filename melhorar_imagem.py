@@ -1,13 +1,15 @@
 """
-melhorar_imagem.py - Módulo para pré-processamento e melhoria da imagem
+melhorar_imagem.py - Módulo para melhorar a visualização da imagem
 
-Este módulo é responsável pelo tratamento da imagem antes da segmentação. 
-Conceitos da disciplina: Melhoria no domínio espacial.
+Este módulo é responsável por preparar a imagem para visualização,
+sem alterar os dados originais usados para detecção.
+
+Conceitos da disciplina: Melhoria no domínio espacial, transformações
+ponto-a-ponto (Aula 03).
 
 Funcionalidades:
-    - CLAHE (Contrast Limited Adaptive Histogram Equalization)
-    - Filtro Gaussiano para redução de ruído
-    - Preparação da imagem para detecção de estrelas
+    - Normalização por percentis (como o Astrometry.net)
+    - Visualização otimizada para exibição
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
@@ -15,133 +17,78 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import numpy as np
-from skimage import exposure, filters
 
 
 def pre_processar(imagem, config=None):
     """
-    Aplica uma sequência de operações para melhorar a imagem,
-    destacando as estrelas e reduzindo ruído.
+    Prepara a imagem para visualização usando normalização por percentis.
+    
+    Esta função é usada APENAS para visualização. A detecção de estrelas
+    deve ser feita na imagem original (sem normalização).
     
     Fluxo:
-        1. Normaliza a imagem para [0, 1] (caso rode esse script direto)
-        2. Aplica CLAHE para uniformizar iluminação
-        3. Aplica filtro Gaussiano para suavizar ruído
+        1. Garante que a imagem está em float64
+        2. Aplica normalização por percentis (10%-95%)
+        3. Retorna imagem no range [0, 1] para exibição
     
     Args:
         imagem (numpy.ndarray): Imagem de entrada (pode ser qualquer escala)
         config (dict, optional): Parâmetros de configuração.
-                                 Se None, usa valores padrão.
     
     Returns:
-        numpy.ndarray: Imagem processada (float64, range [0, 1])
+        numpy.ndarray: Imagem visualizável (float64, range [0, 1])
     """
     
     # Configurações padrão
     if config is None:
         config = {
-            'clahe_clip_limit': 0.02,
-            'clahe_tile_size': 8,
-            'gaussian_sigma': 1.5
+            'low_percent': 10,      # Percentil inferior (10% = padrão do teste)
+            'high_percent': 95,     # Percentil superior (95% = padrão do teste)
         }
     
     # Passo 1: Garantir que a imagem está em float64
     if imagem.dtype != np.float64:
         imagem = imagem.astype(np.float64)
-
-    # Passo 2: Normalizar para [0, 1] se já não estiver
-    if imagem.min() < 0 or imagem.max() > 1:
-        imagem = normalizar_imagem(imagem)
     
-    # Passo 3: Aplicar CLAHE
-    imagem = aplicar_clahe(imagem, 
-                           clip_limit=config['clahe_clip_limit'],
-                           tile_size=config['clahe_tile_size'])
-    
-    # Passo 4: Aplicar filtro Gaussiano
-    imagem = aplicar_filtro_gaussiano(imagem,
-                                      sigma=config['gaussian_sigma'])
+    # Passo 2: Normalização por percentis
+    imagem = normalizar_por_percentil(
+        imagem,
+        low_percent=config['low_percent'],
+        high_percent=config['high_percent']
+    )
     
     return imagem
 
 
-def normalizar_imagem(imagem):
+def normalizar_por_percentil(imagem, low_percent=10, high_percent=95):
     """
-    Normaliza a imagem linearmente para o intervalo [0, 1].
+    Normaliza a imagem usando percentis (como o Astrometry.net).
+    
+    Esta é a abordagem utilizada pelo Astrometry.net (an-fitstopnm).
+    Os valores abaixo do percentil inferior tornam-se 0 (preto),
+    os valores acima do percentil superior tornam-se 1 (branco).
     
     Args:
         imagem (numpy.ndarray): Imagem de entrada
+        low_percent (int): Percentil inferior (padrão: 10)
+        high_percent (int): Percentil superior (padrão: 95)
     
     Returns:
-        numpy.ndarray: Imagem normalizada
+        numpy.ndarray: Imagem normalizada no intervalo [0, 1]
     """
-    r_min = np.min(imagem)
-    r_max = np.max(imagem)
+    # Calcula os percentis
+    low = np.percentile(imagem, low_percent)
+    high = np.percentile(imagem, high_percent)
     
-    if r_max == r_min:
+    # Evita divisão por zero
+    if high == low:
         return np.zeros_like(imagem)
     
-    return (imagem - r_min) / (r_max - r_min)
-
-def aplicar_clahe(imagem, clip_limit=0.02, tile_size=8):
-    """
-    Aplica CLAHE (Contrast Limited Adaptive Histogram Equalization).
+    # Recorta valores fora do intervalo
+    imagem = np.clip(imagem, low, high)
     
-    O CLAHE é uma evolução da equalização de histograma adaptativa.
-    Ele opera em pequenas regiões (tiles) da imagem e limita o contraste
-    para evitar amplificação excessiva de ruído em áreas homogêneas.
-    
-    Conceito da disciplina: Melhoria no domínio espacial (Aula 08)
-    
-    Args:
-        imagem (numpy.ndarray): Imagem de entrada (range [0, 1])
-        clip_limit (float): Limite de contraste (0.01 é padrão do MATLAB)
-        tile_size (int): Tamanho dos tiles (8x8 pixels)
-    
-    Returns:
-        numpy.ndarray: Imagem com contraste melhorado
-    """
-    # CLAHE do scikit-image
-    # O parâmetro clip_limit é normalizado internamente
-    imagem_clahe = exposure.equalize_adapthist(
-        imagem,
-        clip_limit=clip_limit,
-        kernel_size=(tile_size, tile_size)
-    )
-    
-    return imagem_clahe
-
-
-def aplicar_filtro_gaussiano(imagem, sigma=1.5):
-    """
-    Aplica filtro Gaussiano para suavização e redução de ruído.
-    
-    O filtro Gaussiano é um filtro passa-baixas que atenua
-    componentes de alta frequência (ruído, detalhes finos).
-    
-    Conceito da disciplina: Filtros espaciais lineares (Aula 04)
-    
-    Para imagens astronômicas, o filtro Gaussiano ajuda a:
-    - Reduzir ruído de leitura do sensor
-    - Suavizar variações indesejadas
-    - Tornar a detecção de estrelas mais robusta
-    
-    Args:
-        imagem (numpy.ndarray): Imagem de entrada
-        sigma (float): Desvio padrão do kernel Gaussiano
-    
-    Returns:
-        numpy.ndarray: Imagem suavizada
-    """
-    # Filtro Gaussiano do scikit-image
-    # preserve_range=True mantém a imagem no mesmo range [0, 1]
-    imagem_suave = filters.gaussian(
-        imagem,
-        sigma=sigma,
-        preserve_range=True
-    )
-    
-    return imagem_suave
+    # Normaliza para [0, 1]
+    return (imagem - low) / (high - low)
 
 
 def exibir_info_processamento(imagem_original, imagem_processada):
@@ -152,7 +99,7 @@ def exibir_info_processamento(imagem_original, imagem_processada):
         imagem_original (numpy.ndarray): Imagem original
         imagem_processada (numpy.ndarray): Imagem após pré-processamento
     """
-    print("  Pré-processamento:")
+    print("  Pré-processamento (visualização):")
     print(f"    Original: min={np.min(imagem_original):.3f}, "
           f"max={np.max(imagem_original):.3f}, "
           f"média={np.mean(imagem_original):.3f}")
@@ -167,43 +114,66 @@ def exibir_info_processamento(imagem_original, imagem_processada):
 
 if __name__ == "__main__":
     import sys
+    import matplotlib.pyplot as plt
     from ler_fits import carregar_imagem
-    
+    from detectar_estrelas import detectar_estrelas
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
-        print(f"Testando pré-processamento: {caminho_teste}")
+        print(f"Testando visualização: {caminho_teste}")
         print("-" * 50)
         
         try:
-            # Carrega a imagem
+            # Carrega a imagem (crua, sem modificações)
             img, header = carregar_imagem(caminho_teste)
             print(f"Imagem original: {img.shape[0]} × {img.shape[1]} pixels")
-            print(f"  Min: {np.min(img):.3f}, Max: {np.max(img):.3f}")
             
-            # Aplica pré-processamento
-            img_proc = pre_processar(img)
-
-            print(f"\nImagem processada: {img_proc.shape[0]} × {img_proc.shape[1]} pixels")  # type: ignore
-            print(f"  Min: {np.min(img_proc):.3f}, Max: {np.max(img_proc):.3f}")
-            print(f"  Média: {np.mean(img_proc):.3f}")
-            print(f"  Desvio padrão: {np.std(img_proc):.3f}")
+            # Apenas para visualização
+            img_vis = pre_processar(img)
             
-            print("\n✅ Pré-processamento concluído!")
+            print(f"\nImagem visualizável: {img_vis.shape[0]} × {img_vis.shape[1]} pixels")
+            print(f"  Min: {np.min(img_vis):.3f}, Max: {np.max(img_vis):.3f}")
+            print(f"  Média: {np.mean(img_vis):.3f}")
             
-            # Opcional: mostrar a imagem (se tiver matplotlib)
-            try:
-                import matplotlib.pyplot as plt
-                fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-                axes[0].imshow(img, cmap='gray')
-                axes[0].set_title('Original')
-                axes[1].imshow(img_proc, cmap='gray')
-                axes[1].set_title('Após Pré-processamento')
-                plt.show()
-            except ImportError:
-                print("(Matplotlib não disponível para visualização)")
+            # Detecta estrelas NA IMAGEM ORIGINAL (não na visualização)
+            from detectar_estrelas import detectar_estrelas
+            estrelas = detectar_estrelas(img)
+            print(f"\nEstrelas detectadas (photutils): {len(estrelas)}")
+            
+            # Mostra a imagem com estrelas marcadas
+            fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+            
+            # Mostra a imagem visualizável
+            ax.imshow(img_vis, cmap='gray', origin='lower')
+            ax.set_xlim(0, img_vis.shape[1])
+            ax.set_ylim(0, img_vis.shape[0])
+            
+            # Marca as estrelas detectadas
+            from matplotlib.patches import Circle
+            for s in estrelas[:30]:
+                ax.plot(s['x'], s['y'], 'r+', markersize=10, markeredgewidth=2)
+                if s['area'] > 0:
+                    radius = np.sqrt(s['area'] / np.pi) * 1.5
+                    circle = Circle((s['x'], s['y']), radius, color='yellow', fill=False, linewidth=1.5)
+                    ax.add_patch(circle)
+            
+            if estrelas:
+                s_mais = estrelas[0]
+                ax.plot(s_mais['x'], s_mais['y'], 'g*', markersize=25, markeredgewidth=2)
+                ax.text(s_mais['x']+15, s_mais['y']-15, f'⭐ {s_mais["fluxo"]:.1f}', 
+                       color='lime', fontsize=14, weight='bold', backgroundcolor='black', alpha=0.8)
+            
+            ax.set_title(f'{len(estrelas)} estrelas detectadas | Visualização com percentis 10%-95%')
+            ax.axis('off')
+            
+            plt.tight_layout()
+            plt.show()
+            
+            print("\n✅ Visualização concluída!")
             
         except Exception as e:
             print(f"❌ Erro: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print("Uso: python melhorar_imagem.py caminho/para/imagem.fits")
