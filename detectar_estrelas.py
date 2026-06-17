@@ -102,9 +102,30 @@ def detectar_estrelas(imagem, config=None):
     colunas = sources.colnames
     
     for source in sources:
-        # Extrai coordenadas
-        x = float(source['xcentroid']) if 'xcentroid' in colunas else float(source['x'])
-        y = float(source['ycentroid']) if 'ycentroid' in colunas else float(source['y'])
+        # Extrai coordenadas (usando os nomes corretos das colunas)
+        if 'x_centroid' in colunas:
+            x = float(source['x_centroid'])
+            y = float(source['y_centroid'])
+        elif 'xcentroid' in colunas:
+            x = float(source['xcentroid'])
+            y = float(source['ycentroid'])
+        elif 'x' in colunas and 'y' in colunas:
+            x = float(source['x'])
+            y = float(source['y'])
+        else:
+            # Fallback: tenta encontrar qualquer coluna com 'x' no nome
+            col_x = None
+            col_y = None
+            for col in colunas:
+                if 'x' in col.lower() and col_x is None:
+                    col_x = col
+                if 'y' in col.lower() and col_y is None:
+                    col_y = col
+            if col_x is not None and col_y is not None:
+                x = float(source[col_x])
+                y = float(source[col_y])
+            else:
+                continue
         
         # Extrai fluxo
         fluxo = float(source['flux']) if 'flux' in colunas else 0
@@ -180,7 +201,6 @@ if __name__ == "__main__":
             
             if estrelas:
                 # Cria versão normalizada para visualização
-                from melhorar_imagem import pre_processar
                 img_vis = pre_processar(img_raw)
                 
                 # Mostra resultado visual
@@ -198,10 +218,12 @@ if __name__ == "__main__":
                         ax.add_patch(circle)
                 
                 if estrelas:
-                    s_mais = estrelas[0]
-                    ax.plot(s_mais['x'], s_mais['y'], 'g*', markersize=25, markeredgewidth=2)
-                    ax.text(s_mais['x']+15, s_mais['y']-15, f'⭐ {s_mais["fluxo"]:.1f}', 
-                           color='lime', fontsize=14, weight='bold', backgroundcolor='black', alpha=0.8)
+                        s_mais = estrelas[0]
+                        ax.plot(s_mais['x'], s_mais['y'], 'b+', markersize=12, markeredgewidth=2)  # Azul
+                        # Mostra o fluxo ao lado da estrela
+                        ax.text(s_mais['x']+15, s_mais['y']-15, f'{s_mais["fluxo"]:.1f}', 
+                        color='cyan', fontsize=11, weight='bold',
+                        bbox=dict(boxstyle='round,pad=0.3', facecolor='black', alpha=0.5))
                 
                 ax.set_title(f'{len(estrelas)} estrelas detectadas com photutils')
                 ax.axis('off')
