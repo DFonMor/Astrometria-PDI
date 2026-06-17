@@ -1,15 +1,13 @@
 """
 detectar_estrelas.py - Módulo para segmentação e detecção de estrelas
 
-Este módulo é responsável pela: Segmentação e detecção
-de estrelas. Conceitos da disciplina: Segmentação, Morfologia Matemática, 
-Rotulação de regiões (Aula 07).
+Este módulo é responsável pela detecção de estrelas usando a biblioteca photutils.
+Conceitos da disciplina: Segmentação, Morfologia Matemática, Extração de atributos.
 
 Funcionalidades:
-    - Limiarização global (Otsu) para separar estrelas do fundo
-    - Operações morfológicas para limpeza (abertura/fechamento)
-    - Rotulação para identificar objetos individuais
-    - Extração de centroides, fluxos e áreas
+    - Estimativa de fundo da imagem (Background2D)
+    - Detecção de estrelas com DAOStarFinder
+    - Extração de propriedades (centroide, fluxo, área)
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
@@ -17,230 +15,121 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import numpy as np
-from scipy import ndimage
-from skimage import measure, morphology, filters
-import warnings
+from photutils.detection import DAOStarFinder
+from photutils.background import Background2D, MedianBackground
+from astropy.stats import mad_std
 
 
 def detectar_estrelas(imagem, config=None):
     """
-    Detecta estrelas em uma imagem pré-processada.
-    
-    Pipeline:
-        1. Limiarização (Otsu) para criar máscara binária
-        2. Abertura para remover pequenos ruídos
-        3. Fechamento para conectar estrelas fragmentadas
-        4. Rotulação para identificar objetos individuais
-        5. Extração de propriedades (centroide, área, fluxo)
-        6. Filtragem por tamanho (remove estrelas muito grandes/pequenas)
+    Detecta estrelas usando a biblioteca photutils (DAOStarFinder).
     
     Args:
-        imagem (numpy.ndarray): Imagem pré-processada (range [0, 1])
+        imagem (numpy.ndarray): Imagem de entrada (pode ser normalizada ou não)
         config (dict, optional): Parâmetros de configuração.
     
     Returns:
         list: Lista de dicionários, cada um contendo:
               - x (float): Coordenada x do centroide
               - y (float): Coordenada y do centroide
-              - fluxo (float): Intensidade acumulada
-              - area (int): Área em pixels
-              - label (int): Rótulo do objeto
-              - bbox (tuple): Bounding box (min_row, min_col, max_row, max_col)
+              - fluxo (float): Fluxo da estrela
+              - area (int): Número de pixels
+              - sharpness (float): Nitidez da estrela
+              - roundness (float): Circularidade da estrela
     """
     
-    # Configurações padrão
+    # Configurações padrão (baseadas nos testes)
     if config is None:
         config = {
-            'num_stars': 40,
-            'otsu_sensitivity': 1.0,
-            'morph_open_size': 3,
-            'morph_close_size': 3,
-            'min_star_area': 3,
-            'max_star_area': 50,
-            'min_flux': 0.01
+            'fwhm': 3.0,              # Largura típica da estrela (FWHM) em pixels
+            'threshold': 3.0,         # Limiar em sigma
+            'n_brightest': 50,        # Número máximo de estrelas
+            'sharpness_range': (-1.0, 1.0),  # Faixa de nitidez
+            'roundness_range': (-1.0, 1.0),  # Faixa de circularidade
+            'box_size': 50,           # Tamanho da grade para estimativa de fundo
+            'filter_size': 3,         # Tamanho do filtro para estimativa de fundo
         }
     
-    # Passo 1: Limiarização (Otsu)
-    mascara = aplicar_limiar_otsu(imagem, 
-                                  sensitivity=config['otsu_sensitivity'])
+    # ============================================================
+    # PASSO 1: Estimar o fundo da imagem
+    # ============================================================
+    try:
+        bkg = Background2D(
+            imagem,
+            box_size=config['box_size'],
+            filter_size=config['filter_size'],
+            bkg_estimator=MedianBackground()
+        )
+        fundo = bkg.background
+        rms = bkg.background_rms
+    except Exception as e:
+        # Fallback: usar estatísticas globais
+        fundo = np.median(imagem)
+        rms = mad_std(imagem)
     
-    # Passo 2: Limpeza morfológica
-    mascara = limpar_mascara(mascara,
-                            open_size=config['morph_open_size'],
-                            close_size=config['morph_close_size'])
+    # ============================================================
+    # PASSO 2: Subtrair o fundo
+    # ============================================================
+    if isinstance(fundo, np.ndarray):
+        imagem_sub = imagem - fundo
+        rms_value = np.median(rms) if isinstance(rms, np.ndarray) else rms
+    else:
+        imagem_sub = imagem - fundo
+        rms_value = rms
     
-    # Passo 3: Rotulação
-    objetos = rotular_objetos(mascara)
+    imagem_sub = np.maximum(imagem_sub, 0)
     
-    # Passo 4: Extrair propriedades e filtrar
-    estrelas = extrair_propriedades(imagem, objetos,
-                                   min_area=config['min_star_area'],
-                                   max_area=config['max_star_area'],
-                                   min_flux=config['min_flux'])
+    # ============================================================
+    # PASSO 3: Detecção de estrelas com DAOStarFinder
+    # ============================================================
+    daofind = DAOStarFinder(
+        fwhm=config['fwhm'],
+        threshold=config['threshold'] * rms_value,
+        n_brightest=config['n_brightest'],
+        sharpness_range=config['sharpness_range'],
+        roundness_range=config['roundness_range'],
+    )
     
-    # Seleciona as N mais brilhantes (AQUI!)
-    estrelas = selecionar_estrelas_brilhantes(estrelas, config['num_stars'])
-
-    return estrelas
-
-
-def aplicar_limiar_otsu(imagem, sensitivity=1.0):
-    """
-    Aplica limiarização de Otsu para separar estrelas do fundo.
+    sources = daofind(imagem_sub)
     
-    Conceito da disciplina: Limiarização global - método de Otsu
+    if sources is None or len(sources) == 0:
+        return []
     
-    Args:
-        imagem (numpy.ndarray): Imagem de entrada (range [0, 1])
-        sensitivity (float): Fator multiplicador do limiar
-                            (>1: menos estrelas, <1: mais estrelas)
-    
-    Returns:
-        numpy.ndarray: Máscara binária (True = estrela, False = fundo)
-    """
-    # Otsu retorna o limiar no range [0, 1]
-    limiar = filters.threshold_otsu(imagem)
-    
-    # Aplica fator de sensibilidade
-    limiar_ajustado = limiar * sensitivity
-    
-    # Cria máscara binária: objetos são pixels acima do limiar
-    mascara = imagem > limiar_ajustado
-    
-    return mascara
-
-
-def limpar_mascara(mascara, open_size=3, close_size=3):
-    """
-    Aplica operações morfológicas para limpeza da máscara.
-    
-    Operações:
-        1. Abertura (erosão + dilatação): remove pequenos ruídos
-        2. Fechamento (dilatação + erosão): conecta objetos fragmentados
-    
-    Conceito da disciplina: Morfologia matemática
-    
-    Args:
-        mascara (numpy.ndarray): Máscara binária
-        open_size (int): Tamanho do elemento estruturante para abertura
-        close_size (int): Tamanho do elemento estruturante para fechamento
-    
-    Returns:
-        numpy.ndarray: Máscara limpa
-    """
-    # Elemento estruturante para abertura (remove ruído)
-    se_open = morphology.disk(open_size)
-    mascara = morphology.opening(mascara, se_open)
-    
-    # Elemento estruturante para fechamento (conecta estrelas fragmentadas)
-    se_close = morphology.disk(close_size)
-    mascara = morphology.closing(mascara, se_close)
-    
-    return mascara
-
-
-def rotular_objetos(mascara):
-    """
-    Rotula objetos individuais em uma máscara binária.
-    
-    A rotulação atribui um número (label) para cada objeto distinto,
-    permitindo medir propriedades de cada um separadamente.
-    
-    Conceito da disciplina: Rotulação de regiões binárias
-    
-    Args:
-        mascara (numpy.ndarray): Máscara binária
-    
-    Returns:
-        tuple: (labeled_image, num_objects)
-            - labeled_image: Imagem com labels
-            - num_objects: Número de objetos encontrados
-    """
-    # Rotulação com conectividade 8 (considera diagonais)
-    labeled_image, num_objects = ndimage.label(mascara, structure=np.ones((3, 3))) #type: ignore
-    
-    return labeled_image, num_objects
-
-
-def extrair_propriedades(imagem, objetos, min_area=3, max_area=50, min_flux=0.01):
-    """
-    Extrai propriedades de cada objeto rotulado.
-    
-    Propriedades extraídas:
-        - Centroide (x, y) - posição da estrela
-        - Área (pixels) - tamanho da estrela
-        - Fluxo (soma dos pixels) - brilho da estrela
-        - Bounding box - retângulo que envolve a estrela
-    
-    Conceito da disciplina: Extração de atributos
-    
-    Args:
-        imagem (numpy.ndarray): Imagem original (para calcular fluxo)
-        objetos (tuple): (labeled_image, num_objects)
-        min_area (int): Área mínima (pixels) para considerar estrela
-        max_area (int): Área máxima (pixels) para considerar estrela
-        min_flux (float): Fluxo mínimo (intensidade acumulada)
-    
-    Returns:
-        list: Lista de dicionários com as propriedades
-    """
-    labeled_image, _ = objetos
-    
+    # ============================================================
+    # PASSO 4: Extrair propriedades
+    # ============================================================
     estrelas = []
+    colunas = sources.colnames
     
-    # Propriedades padrão: 'label', 'area', 'centroid', 'bbox'
-    props = measure.regionprops(labeled_image, intensity_image=imagem)
-    
-    for prop in props:
-        # Filtra por área
-        area = prop.area
-        if area < min_area or area > max_area:
-            continue
+    for source in sources:
+        # Extrai coordenadas
+        x = float(source['xcentroid']) if 'xcentroid' in colunas else float(source['x'])
+        y = float(source['ycentroid']) if 'ycentroid' in colunas else float(source['y'])
         
-        # Filtra por fluxo (intensidade acumulada)
-        # Usa a média de intensidade * área
-        fluxo = prop.intensity_mean * area
-        if fluxo < min_flux:
-            continue
+        # Extrai fluxo
+        fluxo = float(source['flux']) if 'flux' in colunas else 0
         
-        # Extrai centroide (em coordenadas (x, y))
-        # regionprops retorna (row, col) -> (y, x)
-        y, x = prop.centroid
+        # Extrai área (número de pixels)
+        area = int(source['n_pixels']) if 'n_pixels' in colunas else 0
         
-        # Extrai bounding box
-        min_row, min_col, max_row, max_col = prop.bbox
+        # Extrai qualidade
+        sharpness = float(source['sharpness']) if 'sharpness' in colunas else 0
+        roundness = float(source['roundness1']) if 'roundness1' in colunas else 0
         
         estrela = {
-            'x': float(x),
-            'y': float(y),
-            'fluxo': float(fluxo),
-            'area': int(area),
-            'label': int(prop.label),
-            'bbox': (int(min_row), int(min_col), int(max_row), int(max_col))
+            'x': x,
+            'y': y,
+            'fluxo': fluxo,
+            'area': area,
+            'sharpness': sharpness,
+            'roundness': roundness,
         }
-        
         estrelas.append(estrela)
     
     # Ordena por fluxo (mais brilhante primeiro)
     estrelas.sort(key=lambda s: s['fluxo'], reverse=True)
     
     return estrelas
-
-
-def selecionar_estrelas_brilhantes(estrelas, num_estrelas=40):
-    """
-    Seleciona as N estrelas mais brilhantes.
-    
-    Args:
-        estrelas (list): Lista de estrelas detectadas
-        num_estrelas (int): Número de estrelas a selecionar
-    
-    Returns:
-        list: Lista com as N estrelas mais brilhantes
-    """
-    if len(estrelas) <= num_estrelas:
-        return estrelas
-    return estrelas[:num_estrelas]
 
 
 def exibir_info_deteccao(estrelas):
@@ -253,18 +142,15 @@ def exibir_info_deteccao(estrelas):
     print(f"  Estrelas detectadas: {len(estrelas)}")
     
     if estrelas:
-        # Estatísticas
-        fluxos = [s['fluxo'] for s in estrelas]
-        areas = [s['area'] for s in estrelas]
+        fluxos = [s['fluxo'] for s in estrelas[:10]]
+        areas = [s['area'] for s in estrelas[:10]]
         
-        print(f"    Fluxo: min={min(fluxos):.3f}, max={max(fluxos):.3f}, "
-              f"média={np.mean(fluxos):.3f}")
-        print(f"    Área: min={min(areas)}, max={max(areas)}, "
-              f"média={np.mean(areas):.1f}")
+        print(f"    Top 10 fluxos: {', '.join([f'{f:.1f}' for f in fluxos])}")
+        print(f"    Top 10 áreas: {', '.join([str(a) for a in areas])}")
         
         # Estrela mais brilhante
         s = estrelas[0]
-        print(f"    Mais brilhante: fluxo={s['fluxo']:.3f}, "
+        print(f"    Mais brilhante: fluxo={s['fluxo']:.1f}, "
               f"posição=({s['x']:.1f}, {s['y']:.1f}), área={s['area']}px")
 
 
@@ -275,48 +161,50 @@ def exibir_info_deteccao(estrelas):
 if __name__ == "__main__":
     import sys
     import matplotlib.pyplot as plt
+    from matplotlib.patches import Circle
     from ler_fits import carregar_imagem
     from melhorar_imagem import pre_processar
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
-        print(f"Testando detecção de estrelas: {caminho_teste}")
+        print(f"Testando detecção de estrelas com photutils: {caminho_teste}")
         print("-" * 50)
         
         try:
-            # Carrega e pré-processa
+            # Carrega imagem (sem normalização para detecção)
             img_raw, header = carregar_imagem(caminho_teste)
-            img_proc = pre_processar(img_raw)
             
-            config_deteccao = {
-                'num_stars': 40,
-                'otsu_sensitivity': 1.0,
-                'morph_open_size': 3,
-                'morph_close_size': 3,
-                'min_star_area': 3,
-                'max_star_area': 50,
-                'min_flux': 0.01,
-            }
-
             # Detecta estrelas
-            estrelas = detectar_estrelas(img_proc, config_deteccao) 
+            estrelas = detectar_estrelas(img_raw)
             exibir_info_deteccao(estrelas)
             
             if estrelas:
+                # Cria versão normalizada para visualização
+                from melhorar_imagem import pre_processar
+                img_vis = pre_processar(img_raw)
+                
                 # Mostra resultado visual
-                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+                fig, ax = plt.subplots(1, 1, figsize=(12, 10))
                 
-                # Imagem original
-                ax1.imshow(img_proc, cmap='gray')
-                ax1.set_title('Imagem Pré-processada')
+                ax.imshow(img_vis, cmap='gray', origin='lower')
+                ax.set_xlim(0, img_vis.shape[1])
+                ax.set_ylim(0, img_vis.shape[0])
                 
-                # Imagem com estrelas marcadas
-                ax2.imshow(img_proc, cmap='gray')
-                for s in estrelas[:20]:  # Mostra as 20 mais brilhantes
-                    ax2.plot(s['x'], s['y'], 'r+', markersize=8, markeredgewidth=1)
-                    ax2.text(s['x']+5, s['y']-5, f"{s['fluxo']:.1f}", 
-                            color='red', fontsize=8)
-                ax2.set_title(f'{len(estrelas)} estrelas detectadas')
+                for s in estrelas[:30]:
+                    ax.plot(s['x'], s['y'], 'r+', markersize=10, markeredgewidth=2)
+                    if s['area'] > 0:
+                        radius = np.sqrt(s['area'] / np.pi) * 1.5
+                        circle = Circle((s['x'], s['y']), radius, color='yellow', fill=False, linewidth=1.5)
+                        ax.add_patch(circle)
+                
+                if estrelas:
+                    s_mais = estrelas[0]
+                    ax.plot(s_mais['x'], s_mais['y'], 'g*', markersize=25, markeredgewidth=2)
+                    ax.text(s_mais['x']+15, s_mais['y']-15, f'⭐ {s_mais["fluxo"]:.1f}', 
+                           color='lime', fontsize=14, weight='bold', backgroundcolor='black', alpha=0.8)
+                
+                ax.set_title(f'{len(estrelas)} estrelas detectadas com photutils')
+                ax.axis('off')
                 
                 plt.tight_layout()
                 plt.show()
@@ -325,5 +213,7 @@ if __name__ == "__main__":
                 
         except Exception as e:
             print(f"❌ Erro: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print("Uso: python detectar_estrelas.py caminho/para/imagem.fits")
