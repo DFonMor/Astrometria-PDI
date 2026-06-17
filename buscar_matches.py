@@ -42,17 +42,7 @@ def extrair_quads(quad_data):
     Returns:
         bytes: Todos os quads concatenados (cada quad com 16 bytes)
     """
-    # A coluna 'quads' tem dados binários de 16 bytes cada
     return quad_data['quads'].view('S16').tobytes()
-
-
-def hash_para_indices(hash_bytes):
-    """
-    Converte um hash de 16 bytes para 4 índices inteiros (little-endian).
-    """
-    if len(hash_bytes) != 16:
-        raise ValueError(f"Hash deve ter 16 bytes, tem {len(hash_bytes)}")
-    return struct.unpack('<4I', hash_bytes)
 
 
 def indices_para_hash(indices):
@@ -62,180 +52,6 @@ def indices_para_hash(indices):
     if len(indices) != 4:
         raise ValueError(f"Deve ter 4 índices, tem {len(indices)}")
     return struct.pack('<4I', *indices)
-
-
-def extrair_decs(star_data):
-    """
-    Extrai Declinações do HDU 11.
-    
-    Args:
-        star_data: Dados do HDU 11
-    
-    Returns:
-        np.ndarray: Array de declinações
-    """
-    decs = []
-    
-    # Verifica se star_data é None ou vazio
-    if star_data is None or len(star_data) == 0:
-        return np.array(decs)
-    
-    # Tenta diferentes formas de acessar os dados
-    try:
-        # Caso 1: star_data é um array estruturado com colunas
-        if hasattr(star_data, 'dtype') and star_data.dtype.names is not None:
-            colunas = star_data.dtype.names
-            print(f"      Colunas do HDU 11: {colunas}")
-            
-            # Procura coluna de Dec
-            col_dec = None
-            for nome in colunas:
-                if 'dec' in nome.lower():
-                    col_dec = nome
-                    break
-            
-            if col_dec is None:
-                # Se não encontrou Dec, tenta a primeira coluna que parece ser numérica
-                for nome in colunas:
-                    if 'ra' not in nome.lower() and 'mag' not in nome.lower():
-                        col_dec = nome
-                        break
-            
-            if col_dec is not None:
-                for record in star_data:
-                    try:
-                        dec = float(record[col_dec])
-                        if -90 <= dec <= 90:
-                            decs.append(dec)
-                    except:
-                        continue
-            else:
-                print(f"      ⚠️ Coluna Dec não encontrada")
-                return np.array(decs)
-        
-        # Caso 2: star_data é uma lista de registros
-        elif isinstance(star_data, (list, tuple)):
-            for record in star_data:
-                try:
-                    if len(record) >= 3:
-                        # Tenta extrair Dec da terceira coluna
-                        dec = float(record[2])
-                        if -90 <= dec <= 90:
-                            decs.append(dec)
-                    elif len(record) >= 1:
-                        # Tenta extrair Dec da primeira coluna
-                        dec = float(record[0])
-                        if -90 <= dec <= 90:
-                            decs.append(dec)
-                except:
-                    continue
-        
-        # Caso 3: star_data é um array numpy
-        elif isinstance(star_data, np.ndarray):
-            # Tenta acessar como array estruturado com colunas
-            if star_data.dtype.names is not None:
-                colunas = star_data.dtype.names
-                col_dec = None
-                for nome in colunas:
-                    if 'dec' in nome.lower():
-                        col_dec = nome
-                        break
-                
-                if col_dec is not None:
-                    for record in star_data:
-                        try:
-                            dec = float(record[col_dec])
-                            if -90 <= dec <= 90:
-                                decs.append(dec)
-                        except:
-                            continue
-                else:
-                    # Usa a primeira coluna numérica
-                    for col in colunas:
-                        try:
-                            for record in star_data:
-                                dec = float(record[col])
-                                if -90 <= dec <= 90:
-                                    decs.append(dec)
-                            break
-                        except:
-                            continue
-            else:
-                # Array simples
-                for val in star_data:
-                    try:
-                        dec = float(val)
-                        if -90 <= dec <= 90:
-                            decs.append(dec)
-                    except:
-                        continue
-        
-        # Caso 4: Tentar acessar cada registro como bytes
-        else:
-            for record in star_data:
-                try:
-                    if isinstance(record, bytes):
-                        # Tenta decodificar como string
-                        data_str = record.decode('utf-8').strip()
-                        # Tenta extrair números
-                        parts = data_str.split()
-                        if len(parts) >= 3:
-                            dec = float(parts[2])
-                            if -90 <= dec <= 90:
-                                decs.append(dec)
-                    elif hasattr(record, 'decode'):
-                        data_str = record.decode('utf-8').strip()
-                        parts = data_str.split()
-                        if len(parts) >= 3:
-                            dec = float(parts[2])
-                            if -90 <= dec <= 90:
-                                decs.append(dec)
-                except:
-                    continue
-    
-    except Exception as e:
-        print(f"      ⚠️ Erro ao extrair Decs: {e}")
-        return np.array(decs)
-    
-    return np.array(decs)
-
-
-def extrair_decs_alternativo(star_data):
-    """
-    Extrai Declinações do HDU 11 usando uma abordagem mais robusta.
-    """
-    decs = []
-    
-    if star_data is None or len(star_data) == 0:
-        return np.array(decs)
-    
-    # Tenta acessar como array de bytes
-    try:
-        for record in star_data:
-            if isinstance(record, (bytes, bytearray)):
-                try:
-                    # Tenta decodificar como string
-                    data_str = record.decode('utf-8').strip()
-                    # Busca por padrão de número com sinal
-                    import re
-                    numeros = re.findall(r'[-+]?\d*\.?\d+', data_str)
-                    if len(numeros) >= 3:
-                        dec = float(numeros[2])
-                        if -90 <= dec <= 90:
-                            decs.append(dec)
-                except:
-                    continue
-            elif isinstance(record, (list, tuple, np.ndarray)) and len(record) >= 3:
-                try:
-                    dec = float(record[2])
-                    if -90 <= dec <= 90:
-                        decs.append(dec)
-                except:
-                    continue
-    except Exception as e:
-        pass
-    
-    return np.array(decs)
 
 
 # ============================================================================
@@ -248,9 +64,9 @@ def buscar_matches(padroes, header=None, config=None):
     if config is None:
         config = {
             'data_dir': 'data',
-            'max_quads_to_load': 50000,
+            'max_quads_to_load': None,  # None = sem limite, processa tudo
             'verbose': True,
-            'timeout_seconds': 120,
+            'timeout_seconds': 600,
             'votos_minimos': 3,
         }
     
@@ -356,27 +172,23 @@ def construir_tabela_hash(arquivos_indice, config, dec_min, dec_max):
         
         try:
             with fits.open(arquivo, ignore_missing_end=True) as hdul:
-                # HDU 1: Quads
                 if len(hdul) < 2:
                     continue
                 
                 n_total = len(hdul[1].data)
-
+                
                 # Se max_quads for None, processa tudo
                 if max_quads is None:
                     n_quads = n_total
                 else:
                     n_quads = min(n_total, max_quads)
                 
-                # ============================================================
-                # BARRA DE PROGRESSO PARA ESTE ARQUIVO
-                # ============================================================
                 print(f"\n    📄 {nome_arquivo}: {n_total:,} quads")
                 
                 if n_total > 500000:
                     print(f"      ⚠️ Arquivo grande! Processando {n_quads:,} quads...")
-
-                nome_arquivo = arquivo.name.replace('.fits', '')
+                
+                nome_indice = arquivo.name.replace('.fits', '')
                 
                 # Processa em lotes
                 batch_size = 10000
@@ -394,14 +206,13 @@ def construir_tabela_hash(arquivos_indice, config, dec_min, dec_max):
                     except Exception as e:
                         break
                     
-                    # Adiciona à tabela hash
                     for i in range(n_lote):
                         offset = i * 16
                         hash_bytes = quads_bytes[offset:offset+16]
                         
                         if hash_bytes not in tabela_hash:
                             tabela_hash[hash_bytes] = []
-                        tabela_hash[hash_bytes].append(nome_arquivo)
+                        tabela_hash[hash_bytes].append(nome_indice)
                         
                         if (quads_processados + i) % 10000 == 0:
                             gc.collect()
@@ -501,7 +312,6 @@ if __name__ == "__main__":
                 padroes.append({
                     'hash': tuple(q['hash']),
                     'vertices': q['vertices'],
-                    'area': q['area'],
                     'distancias': q['distancias']
                 })
             
@@ -511,7 +321,7 @@ if __name__ == "__main__":
             
             config_buscar = {
                 'data_dir': 'data',
-                'max_quads_to_load': None,
+                'max_quads_to_load': None,  # Processa todos os quads
                 'verbose': True,
                 'timeout_seconds': 600,
                 'votos_minimos': 3,
