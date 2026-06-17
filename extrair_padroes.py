@@ -6,7 +6,6 @@ padrões invariantes. Conceitos da disciplina: Reconhecimento de padrões e
 invariância geométrica.
 
 Funcionalidades:
-    - Seleção das N estrelas mais brilhantes (MÁXIMO 50)
     - Geração de quads a partir de combinações de 4 estrelas
     - Cálculo do hash (4 índices das estrelas)
     - Controle de memória para evitar crash
@@ -19,21 +18,23 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 import numpy as np
 import math
 from itertools import combinations
-import gc  # Garbage collector para liberar memória
+import gc
 
 
 def extrair_padroes(estrelas, config=None):
     """
     Extrai padrões (quads) a partir das estrelas detectadas.
     
+    NOTA: As estrelas de entrada já devem estar selecionadas (as N mais brilhantes).
+          O detectar_estrelas.py já retorna as estrelas ordenadas por brilho.
+    
     Pipeline:
-        1. Seleciona as N estrelas mais brilhantes (limitado a 50)
-        2. Gera todas as combinações de 4 estrelas (quads)
-        3. Para cada quad, o hash é o próprio conjunto de 4 índices
-        4. Filtra quads com estrelas muito próximas/distantes
+        1. Gera todas as combinações de 4 estrelas (quads)
+        2. Para cada quad, o hash é o próprio conjunto de 4 índices
+        3. Filtra quads com estrelas muito próximas/distantes
     
     Args:
-        estrelas (list): Lista de estrelas detectadas (ordenadas por brilho)
+        estrelas (list): Lista de estrelas detectadas (já ordenadas por brilho)
         config (dict, optional): Parâmetros de configuração.
     
     Returns:
@@ -42,52 +43,32 @@ def extrair_padroes(estrelas, config=None):
               - vertices (list): Índices das 4 estrelas
               - estrelas (list): Os objetos estrela completos
               - area (float): Área do quad (opcional)
+              - distancias (list): Distâncias entre os pares
     """
     
     # Configurações padrão com limites de segurança
     if config is None:
         config = {
-            'num_stars': 40,            # Número de estrelas (MAX: 50 por segurança)
             'max_quads': 100000,        # Máximo de quads a gerar
             'sample_quads': False,      # Se True, amostra aleatória se exceder max_quads
             'min_distance': 10.0,       # Distância mínima entre estrelas (pixels)
             'max_distance': 500.0,      # Distância máxima entre estrelas (pixels)
-            'max_stars_absolute': 50,   # LIMITE ABSOLUTO: nunca usar mais que isso
         }
+    else:
+        # Garante que todas as chaves existam
+        config.setdefault('max_quads', 100000)
+        config.setdefault('sample_quads', False)
+        config.setdefault('min_distance', 10.0)
+        config.setdefault('max_distance', 500.0)
     
-    # LIMITE DE SEGURANÇA: nunca usar mais que 50 estrelas
-    max_stars = min(config['num_stars'], config['max_stars_absolute'])
-    
-    # Seleciona as N estrelas mais brilhantes (limitado)
-    estrelas_brilhantes = selecionar_estrelas(estrelas, max_stars)
-    
-    if len(estrelas_brilhantes) < 4:
-        print(f"⚠️ Apenas {len(estrelas_brilhantes)} estrelas disponíveis. Mínimo: 4")
+    if len(estrelas) < 4:
+        print(f"⚠️ Apenas {len(estrelas)} estrelas disponíveis. Mínimo: 4")
         return []
     
     # Gera quads com controle de memória
-    quads = gerar_quads_com_controle(estrelas_brilhantes, config)
+    quads = gerar_quads_com_controle(estrelas, config)
     
     return quads
-
-
-def selecionar_estrelas(estrelas, num_stars):
-    """
-    Seleciona as N estrelas mais brilhantes (com limite de segurança).
-    
-    Args:
-        estrelas (list): Lista de estrelas (já ordenadas por brilho)
-        num_stars (int): Número de estrelas a selecionar (MÁX: 50)
-    
-    Returns:
-        list: Lista com as N estrelas mais brilhantes
-    """
-    # Garante que nunca ultrapasse o limite
-    num_stars = min(num_stars, 50)
-    
-    if len(estrelas) <= num_stars:
-        return estrelas
-    return estrelas[:num_stars]
 
 
 def gerar_quads_com_controle(estrelas, config):
@@ -121,7 +102,7 @@ def gerar_quads_com_controle(estrelas, config):
             print(f"    → Amostrando aleatoriamente {max_quads:,} quads")
             return gerar_quads_amostrados(estrelas, config, total_combinacoes, max_quads)
         else:
-            # Reduz o número de estrelas
+            # Reduz o número de estrelas (pega as mais brilhantes)
             novas_estrelas = estrelas[:int(np.floor(num_estrelas * 0.9))]
             print(f"    → Reduzindo para {len(novas_estrelas)} estrelas e tentando novamente...")
             return gerar_quads_com_controle(novas_estrelas, config)
@@ -308,7 +289,6 @@ def calcular_area_quad(p1, p2, p3, p4):
     Returns:
         float: Área do quadrilátero
     """
-    # Fórmula do shoelace para quadrilátero
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
@@ -358,10 +338,11 @@ def exibir_info_padroes(padroes):
 
 if __name__ == "__main__":
     import sys
+    import json
+    from pathlib import Path
     import matplotlib.pyplot as plt
     from ler_fits import carregar_imagem
     from melhorar_imagem import pre_processar
-    from detectar_estrelas import detectar_estrelas
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
@@ -369,25 +350,62 @@ if __name__ == "__main__":
         print("-" * 50)
         
         try:
-            # Pipeline completo até detecção
-            img_raw, header = carregar_imagem(caminho_teste)
-            img_proc = pre_processar(img_raw)
-            estrelas = detectar_estrelas(img_proc)
+            # ============================================================
+            # CARREGA AS ESTRELAS DO ARQUIVO GERADO PELO detectar_estrelas
+            # ============================================================
+            pasta_saida = Path("saidas_teste")
+            arquivo_estrelas = pasta_saida / "estrelas_detectadas.json"
             
-            print(f"Estrelas detectadas: {len(estrelas)}")
+            if not arquivo_estrelas.exists():
+                print(f"❌ Arquivo {arquivo_estrelas} não encontrado!")
+                print("   Execute primeiro: python detectar_estrelas.py teste.fits")
+                sys.exit(1)
             
-            # Extrai padrões
-            config = {'num_stars': 40}
+            with open(arquivo_estrelas, 'r') as f:
+                estrelas = json.load(f)
+            
+            print(f"Estrelas carregadas: {len(estrelas)}")
+            
+            # ============================================================
+            # EXTRAI PADRÕES
+            # ============================================================
+            # Configuração vazia - os valores padrão serão usados
+            config = {}
             padroes = extrair_padroes(estrelas, config)
             exibir_info_padroes(padroes)
             
-            # Mostra visualização dos quads (opcional)
+            # ============================================================
+            # SALVA OS QUADS
+            # ============================================================
+            if padroes:
+                dados_quads = []
+                for quad in padroes:
+                    dados_quads.append({
+                        'hash': list(quad['hash']),
+                        'vertices': quad['vertices'],
+                        'area': quad['area'],
+                        'distancias': quad['distancias']
+                    })
+                
+                with open(pasta_saida / "quads_gerados.json", 'w') as f:
+                    json.dump(dados_quads, f, indent=2)
+                print(f"💾 Quads salvos em: {pasta_saida / 'quads_gerados.json'}")
+            
+            # ============================================================
+            # VISUALIZAÇÃO DOS QUADS
+            # ============================================================
             if padroes and len(estrelas) >= 4:
                 import random
                 amostra = random.sample(padroes, min(5, len(padroes)))
                 
+                # Carrega a imagem original para visualização
+                img_raw, header = carregar_imagem(caminho_teste)
+                img_vis = pre_processar(img_raw)
+                
                 fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-                ax.imshow(img_proc, cmap='gray')
+                ax.imshow(img_vis, cmap='gray', origin='lower')
+                ax.set_xlim(0, img_vis.shape[1])
+                ax.set_ylim(0, img_vis.shape[0])
                 
                 # Desenha os quads amostrados
                 cores = ['red', 'blue', 'green', 'yellow', 'magenta']
@@ -405,10 +423,13 @@ if __name__ == "__main__":
                            color=cor, fontsize=8)
                 
                 ax.set_title(f'{len(padroes)} quads gerados (amostra de {len(amostra)})')
+                ax.axis('off')
                 plt.tight_layout()
                 plt.show()
             
         except Exception as e:
             print(f"❌ Erro: {e}")
+            import traceback
+            traceback.print_exc()
     else:
         print("Uso: python extrair_padroes.py caminho/para/imagem.fits")
