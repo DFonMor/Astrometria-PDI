@@ -116,7 +116,6 @@ if __name__ == "__main__":
     import sys
     import matplotlib.pyplot as plt
     from ler_fits import carregar_imagem
-    from detectar_estrelas import detectar_estrelas
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
@@ -135,35 +134,14 @@ if __name__ == "__main__":
             print(f"  Min: {np.min(img_vis):.3f}, Max: {np.max(img_vis):.3f}")
             print(f"  Média: {np.mean(img_vis):.3f}")
             
-            # Detecta estrelas NA IMAGEM ORIGINAL (não na visualização)
-            from detectar_estrelas import detectar_estrelas
-            estrelas = detectar_estrelas(img)
-            print(f"\nEstrelas detectadas (photutils): {len(estrelas)}")
-            
-            # Mostra a imagem com estrelas marcadas
+            # Mostra a imagem limpa (sem marcações)
             fig, ax = plt.subplots(1, 1, figsize=(12, 10))
             
-            # Mostra a imagem visualizável
             ax.imshow(img_vis, cmap='gray', origin='lower')
             ax.set_xlim(0, img_vis.shape[1])
             ax.set_ylim(0, img_vis.shape[0])
             
-            # Marca as estrelas detectadas
-            from matplotlib.patches import Circle
-            for s in estrelas[:30]:
-                ax.plot(s['x'], s['y'], 'r+', markersize=10, markeredgewidth=2)
-                if s['area'] > 0:
-                    radius = np.sqrt(s['area'] / np.pi) * 1.5
-                    circle = Circle((s['x'], s['y']), radius, color='yellow', fill=False, linewidth=1.5)
-                    ax.add_patch(circle)
-            
-            if estrelas:
-                s_mais = estrelas[0]
-                ax.plot(s_mais['x'], s_mais['y'], 'g*', markersize=25, markeredgewidth=2)
-                ax.text(s_mais['x']+15, s_mais['y']-15, f'⭐ {s_mais["fluxo"]:.1f}', 
-                       color='lime', fontsize=14, weight='bold', backgroundcolor='black', alpha=0.8)
-            
-            ax.set_title(f'{len(estrelas)} estrelas detectadas | Visualização com percentis 10%-95%')
+            ax.set_title(f'Visualização com percentis 10%-95%')
             ax.axis('off')
             
             plt.tight_layout()
