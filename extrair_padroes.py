@@ -18,41 +18,29 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 import numpy as np
 import math
 from itertools import combinations
+import struct
 import gc
+import json
+from pathlib import Path
 
 
 def extrair_padroes(estrelas, config=None):
     """
     Extrai padrões (quads) a partir das estrelas detectadas.
     
-    NOTA: As estrelas de entrada já devem estar selecionadas (as N mais brilhantes).
-          O detectar_estrelas.py já retorna as estrelas ordenadas por brilho.
-    
-    Pipeline:
-        1. Gera todas as combinações de 4 estrelas (quads)
-        2. Para cada quad, o hash é o próprio conjunto de 4 índices
-        3. Filtra quads com estrelas muito próximas/distantes
-    
-    Args:
-        estrelas (list): Lista de estrelas detectadas (já ordenadas por brilho)
-        config (dict, optional): Parâmetros de configuração.
-    
-    Returns:
-        list: Lista de dicionários, cada um contendo:
-              - hash (tuple): Chave = (star1, star2, star3, star4)
-              - vertices (list): Índices das 4 estrelas
-              - estrelas (list): Os objetos estrela completos
-              - area (float): Área do quad (opcional)
-              - distancias (list): Distâncias entre os pares
+    Gera hashes compatíveis com o astrometry.net:
+        - Cada quad é composto por 4 estrelas
+        - O hash é calculado a partir das distâncias entre as estrelas
+        - O formato é 4 inteiros de 32 bits (16 bytes)
     """
     
     # Configurações padrão com limites de segurança
     if config is None:
         config = {
-            'max_quads': 100000,        # Máximo de quads a gerar
-            'sample_quads': False,      # Se True, amostra aleatória se exceder max_quads
-            'min_distance': 10.0,       # Distância mínima entre estrelas (pixels)
-            'max_distance': 500.0,      # Distância máxima entre estrelas (pixels)
+            'max_quads': 100000,
+            'sample_quads': False,
+            'min_distance': 10.0,
+            'max_distance': 500.0,
         }
     else:
         # Garante que todas as chaves existam
@@ -65,64 +53,93 @@ def extrair_padroes(estrelas, config=None):
         print(f"⚠️ Apenas {len(estrelas)} estrelas disponíveis. Mínimo: 4")
         return []
     
-    # Gera quads com controle de memória
+    # Gera quads
     quads = gerar_quads_com_controle(estrelas, config)
     
     return quads
 
 
+def gerar_hash_quad(estrelas, indices):
+    """
+    Gera um hash compatível com o astrometry.net para um quad de 4 estrelas.
+    
+    O hash é baseado nas distâncias entre as estrelas, normalizado e discretizado.
+    """
+    # Obtém as 4 estrelas
+    s1 = estrelas[indices[0]]
+    s2 = estrelas[indices[1]]
+    s3 = estrelas[indices[2]]
+    s4 = estrelas[indices[3]]
+    
+    # Calcula distâncias entre pares (6 distâncias)
+    p1 = (s1['x'], s1['y'])
+    p2 = (s2['x'], s2['y'])
+    p3 = (s3['x'], s3['y'])
+    p4 = (s4['x'], s4['y'])
+    
+    d12 = distancia(p1, p2)
+    d13 = distancia(p1, p3)
+    d14 = distancia(p1, p4)
+    d23 = distancia(p2, p3)
+    d24 = distancia(p2, p4)
+    d34 = distancia(p3, p4)
+    
+    # Ordena as distâncias
+    distancias = sorted([d12, d13, d14, d23, d24, d34])
+    
+    # Normaliza pela maior distância (invariância a escala)
+    max_dist = distancias[-1]
+    if max_dist == 0:
+        return None
+    
+    distancias_norm = [d / max_dist for d in distancias]
+    
+    # Discretiza para inteiros (escala de 0 a 1023)
+    hash_values = []
+    for d in distancias_norm:
+        val = int(round(d * 1023))
+        val = max(0, min(1023, val))
+        hash_values.append(val)
+    
+    # Empacota os 6 valores em 4 inteiros de 32 bits
+    hash_int1 = (hash_values[0] << 10) | hash_values[1]
+    hash_int2 = (hash_values[2] << 10) | hash_values[3]
+    hash_int3 = (hash_values[4] << 10) | hash_values[5]
+    hash_int4 = 0
+    
+    return (hash_int1, hash_int2, hash_int3, hash_int4)
+
+
 def gerar_quads_com_controle(estrelas, config):
-    """
-    Gera quads com controle de memória e progresso.
-    
-    Args:
-        estrelas (list): Lista de estrelas
-        config (dict): Configurações
-    
-    Returns:
-        list: Lista de quads
-    """
+    """Gera quads com controle de memória e progresso."""
     num_estrelas = len(estrelas)
-    
-    # Calcula total de combinações
     total_combinacoes = math.comb(num_estrelas, 4)
     
     print(f"  Gerando quads de {num_estrelas} estrelas...")
     print(f"    Total de combinações: {total_combinacoes:,}")
     
-    # Limites de segurança
     max_quads = config.get('max_quads', 100000)
     sample_quads = config.get('sample_quads', False)
     
-    # Verifica se o número de combinações é excessivo
-    if total_combinacoes > max_quads:
-        print(f"    ⚠️ Combinações excedem limite de {max_quads:,}")
-        
-        if sample_quads:
-            print(f"    → Amostrando aleatoriamente {max_quads:,} quads")
-            return gerar_quads_amostrados(estrelas, config, total_combinacoes, max_quads)
-        else:
-            # Reduz o número de estrelas (pega as mais brilhantes)
-            novas_estrelas = estrelas[:int(np.floor(num_estrelas * 0.9))]
-            print(f"    → Reduzindo para {len(novas_estrelas)} estrelas e tentando novamente...")
-            return gerar_quads_com_controle(novas_estrelas, config)
+    if total_combinacoes > max_quads and sample_quads:
+        print(f"    ⚠️ Limitando a {max_quads:,} quads (amostragem aleatória)")
+        import random
+        random.seed(42)
+        indices = list(range(num_estrelas))
+        amostra = random.sample(list(combinations(indices, 4)), max_quads)
+        return gerar_quads_amostrados(estrelas, amostra, config)
+    elif total_combinacoes > max_quads:
+        print(f"    ⚠️ Reduzindo para {int(num_estrelas * 0.9)} estrelas...")
+        novas_estrelas = estrelas[:int(num_estrelas * 0.9)]
+        return gerar_quads_com_controle(novas_estrelas, config)
     
-    # Geração completa (com barra de progresso)
     return gerar_quads_completo(estrelas, config, total_combinacoes)
 
 
 def gerar_quads_completo(estrelas, config, total_combinacoes):
-    """
-    Gera todos os quads com barra de progresso.
+    """Gera todos os quads com barra de progresso."""
+    from tqdm import tqdm
     
-    Args:
-        estrelas (list): Lista de estrelas
-        config (dict): Configurações
-        total_combinacoes (int): Número total de combinações
-    
-    Returns:
-        list: Lista de quads
-    """
     num_estrelas = len(estrelas)
     indices = list(range(num_estrelas))
     quads = []
@@ -130,20 +147,11 @@ def gerar_quads_completo(estrelas, config, total_combinacoes):
     min_dist = config['min_distance']
     max_dist = config['max_distance']
     
-    # Contador para progresso
-    processados = 0
-    ultimo_progresso = 0
-    
-    # Gera todas as combinações de 4 estrelas
-    for i, j, k, l in combinations(indices, 4):
-        # Atualiza progresso a cada 1000 combinações
-        processados += 1
-        if processados - ultimo_progresso >= 1000:
-            ultimo_progresso = processados
-            percentual = (processados / total_combinacoes) * 100
-            print(f"    Processando: {percentual:.1f}% ({processados:,}/{total_combinacoes:,})", end='\r')
+    for i, j, k, l in tqdm(combinations(indices, 4), 
+                           total=total_combinacoes, 
+                           desc="  Gerando quads", 
+                           unit="quad"):
         
-        # Obtém coordenadas das 4 estrelas
         s1 = estrelas[i]
         s2 = estrelas[j]
         s3 = estrelas[k]
@@ -154,7 +162,6 @@ def gerar_quads_completo(estrelas, config, total_combinacoes):
         p3 = (s3['x'], s3['y'])
         p4 = (s4['x'], s4['y'])
         
-        # Calcula distâncias entre pares (para filtrar)
         d12 = distancia(p1, p2)
         d23 = distancia(p2, p3)
         d34 = distancia(p3, p4)
@@ -162,68 +169,42 @@ def gerar_quads_completo(estrelas, config, total_combinacoes):
         d13 = distancia(p1, p3)
         d24 = distancia(p2, p4)
         
-        # Filtra distâncias inválidas
         distancias = [d12, d23, d34, d41, d13, d24]
         if min(distancias) < min_dist or max(distancias) > max_dist:
             continue
         
-        # O hash do quad é o próprio conjunto de 4 índices
-        hash_quad = (i, j, k, l)
+        hash_quad = gerar_hash_quad(estrelas, [i, j, k, l])
+        if hash_quad is None:
+            continue
         
-        # Calcula área (opcional)
         area = calcular_area_quad(p1, p2, p3, p4)
         
         quad = {
             'hash': hash_quad,
             'vertices': [i, j, k, l],
             'estrelas': [s1, s2, s3, s4],
-            'area': area,
-            'distancias': distancias
+            'distancias': distancias,
+            'area': area
         }
         
         quads.append(quad)
         
-        # Libera memória periodicamente (a cada 10.000 quads)
         if len(quads) % 10000 == 0:
             gc.collect()
     
-    print(f"    Processando: 100.0% ({processados:,}/{total_combinacoes:,})")
     print(f"    Quads gerados após filtragem: {len(quads):,}")
-    
     return quads
 
 
-def gerar_quads_amostrados(estrelas, config, total_combinacoes, max_quads):
-    """
-    Gera uma amostra aleatória de quads para evitar sobrecarga.
+def gerar_quads_amostrados(estrelas, amostra, config):
+    """Gera quads a partir de uma amostra aleatória."""
+    from tqdm import tqdm
     
-    Args:
-        estrelas (list): Lista de estrelas
-        config (dict): Configurações
-        total_combinacoes (int): Número total de combinações
-        max_quads (int): Número máximo de quads a gerar
-    
-    Returns:
-        list: Lista de quads amostrados
-    """
-    num_estrelas = len(estrelas)
-    indices = list(range(num_estrelas))
     quads = []
-    
     min_dist = config['min_distance']
     max_dist = config['max_distance']
     
-    # Gera uma amostra aleatória de combinações
-    import random
-    random.seed(42)  # Para reprodutibilidade
-    
-    # Amostra sem repetição
-    amostra_indices = random.sample(list(combinations(indices, 4)), 
-                                   min(max_quads, total_combinacoes))
-    
-    print(f"    Amostrando {len(amostra_indices):,} quads...")
-    
-    for i, j, k, l in amostra_indices:
+    for i, j, k, l in tqdm(amostra, desc="  Gerando quads (amostra)", unit="quad"):
         s1 = estrelas[i]
         s2 = estrelas[j]
         s3 = estrelas[k]
@@ -245,50 +226,38 @@ def gerar_quads_amostrados(estrelas, config, total_combinacoes, max_quads):
         if min(distancias) < min_dist or max(distancias) > max_dist:
             continue
         
-        hash_quad = (i, j, k, l)
+        hash_quad = gerar_hash_quad(estrelas, [i, j, k, l])
+        if hash_quad is None:
+            continue
+        
         area = calcular_area_quad(p1, p2, p3, p4)
         
         quad = {
             'hash': hash_quad,
             'vertices': [i, j, k, l],
             'estrelas': [s1, s2, s3, s4],
-            'area': area,
-            'distancias': distancias
+            'distancias': distancias,
+            'area': area
         }
         
         quads.append(quad)
+        
+        if len(quads) % 10000 == 0:
+            gc.collect()
     
-    print(f"    Quads amostrados após filtragem: {len(quads):,}")
-    
+    print(f"    Quads gerados (amostra): {len(quads):,}")
     return quads
 
 
 def distancia(ponto1, ponto2):
-    """
-    Calcula a distância Euclidiana entre dois pontos.
-    
-    Args:
-        ponto1 (tuple): (x, y)
-        ponto2 (tuple): (x, y)
-    
-    Returns:
-        float: Distância Euclidiana
-    """
+    """Calcula a distância Euclidiana entre dois pontos."""
     x1, y1 = ponto1
     x2, y2 = ponto2
     return np.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
 
 def calcular_area_quad(p1, p2, p3, p4):
-    """
-    Calcula a área de um quadrilátero usando a fórmula do shoelace.
-    
-    Args:
-        p1, p2, p3, p4 (tuple): Coordenadas dos vértices (x, y)
-    
-    Returns:
-        float: Área do quadrilátero
-    """
+    """Calcula a área de um quadrilátero usando a fórmula do shoelace."""
     x1, y1 = p1
     x2, y2 = p2
     x3, y3 = p3
@@ -303,46 +272,24 @@ def calcular_area_quad(p1, p2, p3, p4):
 
 
 def exibir_info_padroes(padroes):
-    """
-    Exibe informações sobre os padrões gerados (para debug).
-    
-    Args:
-        padroes (list): Lista de quads
-    """
+    """Exibe informações sobre os padrões gerados."""
     print(f"  Padrões gerados: {len(padroes)}")
     
     if padroes:
-        # Amostra dos primeiros hashes
         hashes = [str(p['hash']) for p in padroes[:10]]
         print(f"    Hashes (amostra): {', '.join(hashes)}")
-        
-        # Estatísticas das distâncias
-        dists = []
-        for p in padroes:
-            dists.extend(p['distancias'])
-        
-        if dists:
-            print(f"    Distâncias: "
-                  f"min={min(dists):.1f}, max={max(dists):.1f}, "
-                  f"média={np.mean(dists):.1f}")
-        
-        # Contagem de hashes únicos
-        hashes_unicos = len(set(p['hash'] for p in padroes))
-        print(f"    Hashes únicos: {hashes_unicos} de {len(padroes)} "
-              f"({hashes_unicos/len(padroes)*100:.1f}%)")
 
 
 # ============================================================================
-# TESTE (executado apenas se rodar este arquivo diretamente)
+# TESTE
 # ============================================================================
 
 if __name__ == "__main__":
     import sys
     import json
     from pathlib import Path
-    import matplotlib.pyplot as plt
+    from detectar_estrelas import detectar_estrelas
     from ler_fits import carregar_imagem
-    from melhorar_imagem import pre_processar
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
@@ -350,9 +297,6 @@ if __name__ == "__main__":
         print("-" * 50)
         
         try:
-            # ============================================================
-            # CARREGA AS ESTRELAS DO ARQUIVO GERADO PELO detectar_estrelas
-            # ============================================================
             pasta_saida = Path("saidas_teste")
             arquivo_estrelas = pasta_saida / "estrelas_detectadas.json"
             
@@ -366,66 +310,29 @@ if __name__ == "__main__":
             
             print(f"Estrelas carregadas: {len(estrelas)}")
             
-            # ============================================================
-            # EXTRAI PADRÕES
-            # ============================================================
-            # Configuração vazia - os valores padrão serão usados
-            config = {}
+            # Configuração com todos os parâmetros
+            config = {
+                'max_quads': 300000,  # Suficiente para 50 estrelas
+                'sample_quads': False,
+                'min_distance': 10.0,
+                'max_distance': 500.0,
+            }
             padroes = extrair_padroes(estrelas, config)
             exibir_info_padroes(padroes)
             
-            # ============================================================
-            # SALVA OS QUADS
-            # ============================================================
             if padroes:
                 dados_quads = []
                 for quad in padroes:
                     dados_quads.append({
                         'hash': list(quad['hash']),
                         'vertices': quad['vertices'],
-                        'area': quad['area'],
+                        'area': quad.get('area', 0),
                         'distancias': quad['distancias']
                     })
                 
                 with open(pasta_saida / "quads_gerados.json", 'w') as f:
                     json.dump(dados_quads, f, indent=2)
                 print(f"💾 Quads salvos em: {pasta_saida / 'quads_gerados.json'}")
-            
-            # ============================================================
-            # VISUALIZAÇÃO DOS QUADS
-            # ============================================================
-            if padroes and len(estrelas) >= 4:
-                import random
-                amostra = random.sample(padroes, min(5, len(padroes)))
-                
-                # Carrega a imagem original para visualização
-                img_raw, header = carregar_imagem(caminho_teste)
-                img_vis = pre_processar(img_raw)
-                
-                fig, ax = plt.subplots(1, 1, figsize=(10, 8))
-                ax.imshow(img_vis, cmap='gray', origin='lower')
-                ax.set_xlim(0, img_vis.shape[1])
-                ax.set_ylim(0, img_vis.shape[0])
-                
-                # Desenha os quads amostrados
-                cores = ['red', 'blue', 'green', 'yellow', 'magenta']
-                for idx, quad in enumerate(amostra):
-                    cor = cores[idx % len(cores)]
-                    vertices = quad['estrelas']
-                    
-                    # Extrai coordenadas
-                    pts = [(s['x'], s['y']) for s in vertices]
-                    pts.append(pts[0])  # Fecha o quad
-                    
-                    xs, ys = zip(*pts)
-                    ax.plot(xs, ys, color=cor, linewidth=1.5)
-                    ax.text(pts[0][0], pts[0][1] - 10, str(quad['hash'])[:8], 
-                           color=cor, fontsize=8)
-                
-                ax.set_title(f'{len(padroes)} quads gerados (amostra de {len(amostra)})')
-                ax.axis('off')
-                plt.tight_layout()
-                plt.show()
             
         except Exception as e:
             print(f"❌ Erro: {e}")
