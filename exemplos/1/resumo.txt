@@ -1,0 +1,56 @@
+======================================================================
+RESULTADOS DO TESTE DE PRÉ-PROCESSAMENTO
+======================================================================
+
+RESULTADOS POR ABORDAGEM:
+----------------------------------------------------------------------
+  Original (sem pré-processamento): 8 estrelas
+    Imagem: 01_Original_sem_pré-processamento.png
+
+  Apenas normalização: 8 estrelas
+    Imagem: 02_Apenas_normalização.png
+
+  Suavização mínima: 50 estrelas
+    Imagem: 03_Suavização_mínima.png
+
+  Percentis (25%-95%): 8 estrelas
+    Imagem: 04_Percentis_25pct-95pct.png
+
+  Percentis (10%-90%): 10 estrelas
+    Imagem: 05_Percentis_10pct-90pct.png
+
+  Percentis (5%-95%): 13 estrelas
+    Imagem: 06_Percentis_5pct-95pct.png
+
+  Subtração de fundo (r=50): 50 estrelas
+    Imagem: 07_Subtração_de_fundo_r=50.png
+
+  Subtração de fundo (r=30): 50 estrelas
+    Imagem: 08_Subtração_de_fundo_r=30.png
+
+  Subtração de fundo (r=20): 50 estrelas
+    Imagem: 09_Subtração_de_fundo_r=20.png
+
+
+======================================================================
+RANKING (melhor para pior):
+----------------------------------------------------------------------
+  1. Suavização mínima: 50 estrelas
+  2. Subtração de fundo (r=50): 50 estrelas
+  3. Subtração de fundo (r=30): 50 estrelas
+  4. Subtração de fundo (r=20): 50 estrelas
+  5. Percentis (5%-95%): 13 estrelas
+  6. Percentis (10%-90%): 10 estrelas
+  7. Original (sem pré-processamento): 8 estrelas
+  8. Apenas normalização: 8 estrelas
+  9. Percentis (25%-95%): 8 estrelas
+
+======================================================================
+RECOMENDAÇÃO:
+----------------------------------------------------------------------
+
+  ✅ Melhor pré-processamento: Suavização mínima
+     Detectou 50 estrelas
+     Imagem: 03_Suavização_mínima.png
+
+  Atualize o melhorar_imagem.py com esta abordagem.

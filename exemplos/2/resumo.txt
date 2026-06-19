@@ -1,0 +1,76 @@
+======================================================================
+RESULTADOS DO TESTE DE PRÉ-PROCESSAMENTO
+======================================================================
+
+RESULTADOS POR ABORDAGEM:
+----------------------------------------------------------------------
+  Original (sem pré-processamento): 8 estrelas
+    Imagem: 01_Original_sem_pré_processamento.png
+
+  Percentis (25%-95%): 8 estrelas
+    Imagem: 02_Percentis_25pct_95pct.png
+
+  Percentis (15%-90%): 8 estrelas
+    Imagem: 03_Percentis_15pct_90pct.png
+
+  Percentis (10%-85%): 11 estrelas
+    Imagem: 04_Percentis_10pct_85pct.png
+
+  Percentis (5%-80%): 23 estrelas
+    Imagem: 05_Percentis_5pct_80pct.png
+
+  Percentis (5%-95%): 13 estrelas
+    Imagem: 06_Percentis_5pct_95pct.png
+
+  Percentis (10%-90%): 10 estrelas
+    Imagem: 07_Percentis_10pct_90pct.png
+
+  Astrometry (r=30, 10%-90%): 50 estrelas
+    Imagem: 08_Astrometry_r30,_10pct_90pct.png
+
+  Astrometry (r=50, 5%-95%): 50 estrelas
+    Imagem: 09_Astrometry_r50,_5pct_95pct.png
+
+  Astrometry (r=20, 15%-85%): 28 estrelas
+    Imagem: 10_Astrometry_r20,_15pct_85pct.png
+
+  Subtração de fundo (r=50): 50 estrelas
+    Imagem: 11_Subtração_de_fundo_r50.png
+
+  Subtração de fundo (r=30): 50 estrelas
+    Imagem: 12_Subtração_de_fundo_r30.png
+
+  Subtração de fundo (r=20): 50 estrelas
+    Imagem: 13_Subtração_de_fundo_r20.png
+
+  Suavização mínima: 50 estrelas
+    Imagem: 14_Suavização_mínima.png
+
+
+======================================================================
+RANKING (melhor para pior):
+----------------------------------------------------------------------
+  1. Astrometry (r=30, 10%-90%): 50 estrelas
+  2. Astrometry (r=50, 5%-95%): 50 estrelas
+  3. Subtração de fundo (r=50): 50 estrelas
+  4. Subtração de fundo (r=30): 50 estrelas
+  5. Subtração de fundo (r=20): 50 estrelas
+  6. Suavização mínima: 50 estrelas
+  7. Astrometry (r=20, 15%-85%): 28 estrelas
+  8. Percentis (5%-80%): 23 estrelas
+  9. Percentis (5%-95%): 13 estrelas
+  10. Percentis (10%-85%): 11 estrelas
+  11. Percentis (10%-90%): 10 estrelas
+  12. Original (sem pré-processamento): 8 estrelas
+  13. Percentis (25%-95%): 8 estrelas
+  14. Percentis (15%-90%): 8 estrelas
+
+======================================================================
+RECOMENDAÇÃO:
+----------------------------------------------------------------------
+
+  ✅ Melhor pré-processamento: Astrometry (r=30, 10%-90%)
+     Detectou 50 estrelas
+     Imagem: 08_Astrometry_r30,_10pct_90pct.png
+
+  Atualize o melhorar_imagem.py com esta abordagem.
