@@ -218,7 +218,7 @@ if __name__ == "__main__":
                 # SALVA ESTRELAS NO FORMATO .XY (para o solve-field)
                 # ============================================================
                 salvar_estrelas_xy(estrelas, "saidas_teste/estrelas.xy")
-                print(f"💾 Estrelas salvas em: estrelas.xy")
+                print(f"💾 Estrelas salvas em: saidas_teste/estrelas.xy")
                 
                 # ============================================================
                 # VISUALIZAÇÃO
