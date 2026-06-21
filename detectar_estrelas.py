@@ -152,6 +152,25 @@ def detectar_estrelas(imagem, config=None):
     return estrelas
 
 
+def salvar_estrelas_xy(estrelas, arquivo_saida):
+    """
+    Salva a lista de estrelas no formato .xy do astrometry.net.
+    
+    Formato:
+        x y fluxo
+        cada linha: coordenada_x coordenada_y fluxo
+    
+    Args:
+        estrelas (list): Lista de estrelas detectadas
+        arquivo_saida (str): Caminho para o arquivo .xy
+    """
+    with open(arquivo_saida, 'w') as f:
+        f.write("# Estrelas detectadas\n")
+        f.write("# x y fluxo\n")
+        for s in estrelas:
+            f.write(f"{s['x']:.3f} {s['y']:.3f} {s['fluxo']:.3f}\n")
+
+
 def exibir_info_deteccao(estrelas):
     """
     Exibe informações sobre a detecção de estrelas (para debug).
@@ -176,8 +195,6 @@ def exibir_info_deteccao(estrelas):
 
 if __name__ == "__main__":
     import sys
-    import json
-    from pathlib import Path
     import matplotlib.pyplot as plt
     from matplotlib.patches import Circle
     from ler_fits import carregar_imagem
@@ -198,18 +215,10 @@ if __name__ == "__main__":
             
             if estrelas:
                 # ============================================================
-                # SALVA AS ESTRELAS DETECTADAS PARA USO NO extrair_padroes
+                # SALVA ESTRELAS NO FORMATO .XY (para o solve-field)
                 # ============================================================
-                pasta_saida = Path("saidas_teste")
-                pasta_saida.mkdir(exist_ok=True)
-                
-                # Salva como JSON (legível)
-                dados_json = [{'x': s['x'], 'y': s['y'], 'fluxo': s['fluxo'], 'area': s['area']} 
-                              for s in estrelas]
-                
-                with open(pasta_saida / "estrelas_detectadas.json", 'w') as f:
-                    json.dump(dados_json, f, indent=2)
-                print(f"💾 JSON salvo: {pasta_saida / 'estrelas_detectadas.json'}")
+                salvar_estrelas_xy(estrelas, "saidas_teste/estrelas.xy")
+                print(f"💾 Estrelas salvas em: estrelas.xy")
                 
                 # ============================================================
                 # VISUALIZAÇÃO
@@ -243,7 +252,6 @@ if __name__ == "__main__":
                 plt.show()
                 
                 print("\n✅ Visualização concluída!")
-                print(f"📁 Arquivos salvos em: {pasta_saida.absolute()}")
             else:
                 print("⚠️ Nenhuma estrela detectada!")
                 
