@@ -270,17 +270,7 @@ Este esforço enfrentou desafios substanciais:
 - **Incompatibilidade de hashes**: A geração manual dos hashes dos quads não produziu códigos compatíveis com os armazenados nos índices do Astrometry.net. O algoritmo de hash utilizado pelo Astrometry.net é complexo e depende de uma normalização específica das coordenadas dentro de um sistema de referência definido pelas estrelas mais distantes do quad. Reproduzir este algoritmo exatamente mostrou-se uma tarefa de alta complexidade, envolvendo geometria computacional e otimizações que extrapolavam o escopo do projeto.
 
 - **Estrutura dos índices**: Os arquivos de índice do Astrometry.net (séries 4107 e 5206) não armazenam apenas os hashes, mas também estruturas de dados otimizadas para busca, como árvores KD (KD-trees), que permitem encontrar correspondências aproximadas de forma eficiente. Replicar essa estrutura de busca seria um projeto em si mesmo.
-## Referências
 
-LANG, D.; HOGG, D. W.; MIERLE, K.; BLANTON, M.; ROWEIS, S. Astrometry.net: Blind astrometric calibration of arbitrary astronomical images. *The Astronomical Journal*, v. 139, n. 5, p. 1782-1800, 2010.
-
-ASTROPY. *Astropy: A community Python package for Astronomy*. Disponível em: https://www.astropy.org. Acesso em: 25 jun. 2026.
-
-ASTROMETRY.NET. *Astrometry.net: Blind Astrometric Calibration*. Disponível em: http://astrometry.net. Acesso em: 25 jun. 2026.
-
-PHOTUTILS. *DAOStarFinder: Detect stars in an image using the DAOFIND algorithm*. Photutils Documentation. Disponível em: https://photutils.readthedocs.io/en/latest/api/photutils.detection.DAOStarFinder.html. Acesso em: 25 jun. 2026.
-
-ZWO. *Seestar S50 All-in-One Smart Telescope*. ZWO Official Website. Disponível em: https://us.zwoastro.com/collections/seestar/products/seestar-s50. Acesso em: 25 jun. 2026.
 - **Escala e volume de dados**: Cada arquivo de índice contém centenas de milhares ou milhões de quads. A busca exaustiva por correspondências, sem as otimizações do Astrometry.net, seria computacionalmente inviável.
 
 Diante dessas dificuldades, optou-se por utilizar o motor do Astrometry.net como uma caixa preta, através do executável `solve-field`. Esta abordagem, embora menos didática do ponto de vista da implementação do matching, garantiu que o pipeline funcionasse de forma confiável e eficiente, utilizando o algoritmo de geometric hashing original e as estruturas de dados otimizadas, desenvolvidas e testadas ao longo de anos pela comunidade astronômica. A integração do `solve-field` permitiu que o foco do projeto permanecesse no entendimento do fluxo completo da astrometria, da aquisição à solução, sem se perder nas complexidades específicas do algoritmo de matching.
