@@ -1,185 +1,182 @@
 """
-plate_solve.py - Módulo para resolução astrométrica usando solve-field
+plate_solve.py - Módulo para resolução astrométrica usando solve-field (versão 0.93)
 
 Este módulo utiliza as estrelas detectadas (arquivo .xy) e chama o solve-field
 para identificar o campo estelar da imagem.
+
+Funcionalidades:
+    - Converte .xy para FITS BINTABLE
+    - Lista arquivos de índice
+    - Cria arquivo de configuração temporário
+    - Executa solve-field com --config
+    - Lê e interpreta WCS
 """
 
 import subprocess
 import shutil
+import glob
+import tempfile
 import os
 import sys
-import platform
 from pathlib import Path
 from astropy.io import fits
 from astropy.wcs import WCS
 
 
-def converter_caminho_wsl(caminho):
-    """
-    Converte um caminho Windows para formato WSL.
-    Exemplo: D:\\pasta\\arquivo.xy -> /mnt/d/pasta/arquivo.xy
-    """
-    if not caminho:
-        return caminho
-    
-    caminho = str(caminho).replace('\\', '/')
-    
-    if len(caminho) > 1 and caminho[1] == ':':
-        drive = caminho[0].lower()
-        caminho = f"/mnt/{drive}{caminho[2:]}"
-    
-    return caminho
-
-
 def encontrar_solve_field():
     """
-    Encontra o executável solve-field no sistema.
+    Encontra o executável solve-field no sistema Linux.
+    
+    Returns:
+        str: Caminho para solve-field ou None se não encontrado
     """
-    # Verifica se está no WSL
-    is_wsl = 'WSLENV' in os.environ or 'WSL_DISTRO_NAME' in os.environ
-    
-    if is_wsl:
-        if shutil.which('solve-field'):
-            return 'solve-field'
-        else:
-            return None
-    
-    # Verifica se está no Windows (usando WSL interop)
-    if platform.system() == 'Windows':
-        wsl_path = shutil.which('wsl')
-        if wsl_path:
-            try:
-                result = subprocess.run(
-                    ['wsl', 'which', 'solve-field'],
-                    capture_output=True,
-                    text=True
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    return 'wsl'
-            except:
-                pass
-    
     if shutil.which('solve-field'):
         return 'solve-field'
-    
     return None
 
 
-def executar_solve_field(args, config=None):
+def listar_indices(diretorio):
     """
-    Executa o solve-field, adaptando para o ambiente (WSL ou Windows).
+    Lista todos os arquivos de índice no diretório.
+    
+    Args:
+        diretorio (str): Caminho para o diretório com os índices
+    
+    Returns:
+        list: Lista de caminhos completos dos índices
     """
-    solve_cmd = encontrar_solve_field()
+    diretorio = Path(diretorio)
+    if not diretorio.exists():
+        return []
     
-    if not solve_cmd:
-        raise FileNotFoundError("solve-field não encontrado")
+    # Procura por arquivos de índice em vários formatos
+    padroes = ['index-*.fits', 'index-*.fit', '*.fits']
+    indices = []
     
-    # Se estiver no Windows e o comando for 'wsl', converte caminhos
-    if platform.system() == 'Windows' and solve_cmd == 'wsl':
-        args_convertidos = []
-        for arg in args:
-            if isinstance(arg, str):
-                if '/' in arg or '\\' in arg or ':' in arg:
-                    arg = converter_caminho_wsl(arg)
-            args_convertidos.append(arg)
-        
-        cmd = ['wsl', 'solve-field'] + args_convertidos
-    else:
-        cmd = ['solve-field'] + args
+    for padrao in padroes:
+        indices.extend(glob.glob(str(diretorio / padrao)))
     
-    timeout = config.get('timeout', 120) + 10 if config else 130
-    return subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout
-    )
+    # Filtra apenas arquivos que parecem ser índices (contêm 'index' no nome)
+    indices = [i for i in indices if 'index' in Path(i).stem.lower()]
+    
+    return sorted(indices)
 
 
-def resolver_imagem_direta(imagem_path, config=None):
+def criar_arquivo_config(indices, arquivo_config):
     """
-    Fallback: resolve a imagem diretamente (sem arquivo .xy).
+    Cria um arquivo de configuração para o solve-field.
+    
+    Formato do arquivo de configuração:
+        index /caminho/para/index-xxx.fits
+        index /caminho/para/index-yyy.fits
+        ...
+    
+    Args:
+        indices (list): Lista de caminhos dos índices
+        arquivo_config (str): Caminho para o arquivo de configuração
     """
-    if imagem_path is None or not Path(imagem_path).exists():
-        return {'success': False, 'erro': 'Falha no fallback: imagem não encontrada'}
+    with open(arquivo_config, 'w') as f:
+        f.write("# Arquivo de configuração gerado pelo plate_solve.py\n")
+        f.write(f"# Total de índices: {len(indices)}\n\n")
+        for idx in indices:
+            f.write(f"index {idx}\n")
+
+
+def converter_xy_para_fits(arquivo_xy, arquivo_saida=None):
+    """
+    Converte um arquivo .xy para FITS BINTABLE.
     
-    if config is None:
-        config = {
-            'indices_dir': 'data',
-            'scale_low': 0.3,
-            'scale_high': 1.0,
-            'timeout': 120,
-            'verbose': True,
-        }
+    Args:
+        arquivo_xy (str): Caminho para o arquivo .xy
+        arquivo_saida (str, optional): Caminho para o arquivo .fits de saída
     
-    solve_cmd = encontrar_solve_field()
-    if not solve_cmd:
-        return {'success': False, 'erro': 'solve-field não encontrado'}
+    Returns:
+        str: Caminho para o arquivo .fits criado
+    """
+    import numpy as np
     
-    args = [
-        str(imagem_path),
-        '--overwrite',
-        '--no-plots',
-        '--scale-low', str(config['scale_low']),
-        '--scale-high', str(config['scale_high']),
-        '--index-dir', config['indices_dir'],
-        '--new-fits', 'none',
-        '--match', 'none',
-        '--wcs', 'none',
-        '--corr', 'none',
-        '--rdls', 'none',
-        '--solved', 'none'
-    ]
+    xy_path = Path(arquivo_xy)
+    if not xy_path.exists():
+        raise FileNotFoundError(f"Arquivo .xy não encontrado: {arquivo_xy}")
     
-    try:
-        result = executar_solve_field(args, config)
-    except Exception as e:
-        return {'success': False, 'erro': str(e)}
+    if arquivo_saida is None:
+        arquivo_saida = xy_path.parent / f"{xy_path.stem}.axy.fits"
     
-    base_name = Path(imagem_path).stem
-    solved_file = f"{base_name}.solved"
-    wcs_file = f"{base_name}.wcs"
+    # Tenta diferentes encodings
+    encodings = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1', 'utf-16']
+    conteudo = None
     
-    if not Path(solved_file).exists():
-        return {'success': False, 'erro': 'Não foi possível resolver'}
+    for encoding in encodings:
+        try:
+            with open(xy_path, 'r', encoding=encoding) as f:
+                conteudo = f.readlines()
+            break
+        except (UnicodeDecodeError, UnicodeError):
+            continue
     
-    try:
-        with fits.open(wcs_file) as hdul:
-            header = hdul[0].header
-            wcs = WCS(header)
-            
-            crpix1 = header.get('CRPIX1', 0)
-            crpix2 = header.get('CRPIX2', 0)
-            
-            ra_center, dec_center = wcs.all_pix2world([[crpix1, crpix2]], 0)[0]
-            objeto = header.get('OBJECT', 'Desconhecido')
-            pixel_scale = abs(header.get('CDELT1', 0)) * 3600
-            
-            return {
-                'success': True,
-                'ra': float(ra_center),
-                'dec': float(dec_center),
-                'objeto': str(objeto),
-                'pixel_scale': float(pixel_scale),
-                'arquivos': {
-                    'wcs': wcs_file,
-                    'solved': solved_file,
-                },
-                'header': dict(header),
-            }
-    except Exception as e:
-        return {'success': False, 'erro': f'Erro ao ler WCS: {e}'}
+    if conteudo is None:
+        with open(xy_path, 'rb') as f:
+            raw_data = f.read()
+            texto = raw_data.decode('utf-8', errors='ignore')
+            conteudo = texto.splitlines()
+    
+    # Pula linhas de comentário e processa dados
+    dados = []
+    for linha in conteudo:
+        linha = linha.strip()
+        if not linha or linha.startswith('#'):
+            continue
+        partes = linha.split()
+        if len(partes) >= 2:
+            try:
+                x = float(partes[0])
+                y = float(partes[1])
+                fluxo = float(partes[2]) if len(partes) >= 3 else 1.0
+                dados.append((x, y, fluxo))
+            except ValueError:
+                continue
+    
+    if not dados:
+        raise ValueError("Nenhum dado válido encontrado no arquivo .xy")
+    
+    # Cria um array numpy estruturado
+    dtype = [('X', 'f8'), ('Y', 'f8'), ('FLUX', 'f8')]
+    array = np.array(dados, dtype=dtype)
+    
+    # Cria o HDU
+    hdu = fits.BinTableHDU(array)
+    hdu.header['EXTNAME'] = 'XYLIST'
+    
+    # Salva
+    hdu.writeto(arquivo_saida, overwrite=True)
+    
+    return str(arquivo_saida)
 
 
 def resolver_imagem(arquivo_xy, config=None):
     """
     Resolve uma imagem usando o arquivo .xy com as estrelas detectadas.
+    Compatível com solve-field versão 0.93.
+    
+    Args:
+        arquivo_xy (str): Caminho para o arquivo .xy com as estrelas
+        config (dict, optional): Parâmetros de configuração
+    
+    Returns:
+        dict: Resultado da resolução com:
+              - success (bool): True se resolveu
+              - ra (float): RA do centro (graus)
+              - dec (float): Dec do centro (graus)
+              - objeto (str): Nome do campo
+              - pixel_scale (float): Escala em arcsec/pixel
+              - arquivos (dict): Arquivos gerados
+              - header (dict): Cabeçalho WCS
     """
     
+    # Configurações padrão
     if config is None:
         config = {
-            'indices_dir': 'data',
+            'indices_dir': '/home/dell/Astrometria-PDI/data',
             'scale_low': 0.3,
             'scale_high': 1.0,
             'width': 1920,
@@ -193,8 +190,7 @@ def resolver_imagem(arquivo_xy, config=None):
     if not solve_cmd:
         return {
             'success': False, 
-            'erro': 'solve-field não encontrado. Instale o astrometry.net.\n'
-                   'No WSL: sudo apt install astrometry.net'
+            'erro': 'solve-field não encontrado. Instale: sudo apt install astrometry.net'
         }
     
     # Verifica se o arquivo .xy existe
@@ -211,6 +207,7 @@ def resolver_imagem(arquivo_xy, config=None):
             break
     
     if not fits_path:
+        # Tenta na pasta atual
         possivel_fits = Path("teste.fits")
         if possivel_fits.exists():
             fits_path = possivel_fits
@@ -223,73 +220,129 @@ def resolver_imagem(arquivo_xy, config=None):
     if not fits_path:
         return {'success': False, 'erro': 'Arquivo .fits correspondente não encontrado'}
     
+    # ============================================================
+    # PASSO 1: Converte .xy para FITS BINTABLE
+    # ============================================================
+    
+    try:
+        axy_fits = converter_xy_para_fits(xy_path)
+        if config.get('verbose', True):
+            print(f"  🔭 Resolvendo imagem: {fits_path.name}")
+            print(f"     Usando lista de estrelas: {xy_path.name}")
+            print(f"     ✅ .xy convertido para: {axy_fits}")
+    except Exception as e:
+        return {'success': False, 'erro': f'Erro ao converter .xy para FITS: {e}'}
+    
+    # ============================================================
+    # PASSO 2: Lista os índices
+    # ============================================================
+    
+    indices = listar_indices(config['indices_dir'])
+    
+    if not indices:
+        return {
+            'success': False, 
+            'erro': f'Nenhum arquivo de índice encontrado em {config["indices_dir"]}'
+        }
+    
     if config.get('verbose', True):
-        print(f"  🔭 Resolvendo imagem: {fits_path.name}")
-        print(f"     Usando lista de estrelas: {xy_path.name}")
-        print(f"     Índices: {config['indices_dir']}")
+        print(f"     Encontrados {len(indices)} arquivos de índice")
         print(f"     Escala: {config['scale_low']}° - {config['scale_high']}°")
         print(f"     Dimensões: {config['width']} x {config['height']} px")
-        print(f"     solve-field via: {solve_cmd}")
+        print(f"     Versão do solve-field: 0.93 (usando --config)")
     
     # ============================================================
-    # PASSO 1: Executa o solve-field com a imagem E o arquivo .xy
-    # Usando o formato que funcionou no teste manual
+    # PASSO 3: Cria arquivo de configuração temporário
     # ============================================================
     
+    # Cria um arquivo temporário para o config
+    config_file = tempfile.NamedTemporaryFile(
+        mode='w',
+        suffix='.cfg',
+        delete=False,
+        dir='/tmp'
+    )
+    config_path = config_file.name
+    
+    try:
+        criar_arquivo_config(indices, config_path)
+        if config.get('verbose', True):
+            print(f"     Arquivo de configuração: {config_path}")
+    except Exception as e:
+        return {'success': False, 'erro': f'Erro ao criar arquivo de configuração: {e}'}
+    
+    # ============================================================
+    # PASSO 4: Monta e executa o comando
+    # ============================================================
+    
+    base_name = fits_path.stem
+    solved_file = f"{base_name}.solved"
+    wcs_file = f"{base_name}.wcs"
+    match_file = f"{base_name}.match"
+    
+    # Comando usando --config (compatível com 0.93)
     args = [
-        str(fits_path),  # Imagem primeiro
-        '--keep-xylist', str(xy_path),  # Salva a lista de estrelas
+        str(fits_path),
+        '--config', config_path,
         '--overwrite',
         '--no-plots',
         '--scale-low', str(config['scale_low']),
         '--scale-high', str(config['scale_high']),
-        '--index-dir', config['indices_dir'],
         '--width', str(config['width']),
         '--height', str(config['height']),
+        '--solved', solved_file,
+        '--wcs', wcs_file,
+        '--match', match_file,
         '--new-fits', 'none',
-        '--match', 'none',
         '--corr', 'none',
         '--rdls', 'none',
-        '--solved', 'none'
     ]
     
     if config.get('verbose', True):
-        print(f"     Comando: {solve_cmd} {' '.join(args)}")
+        print(f"     Comando: solve-field {fits_path.name} (com {len(indices)} índices)")
     
     try:
-        result = executar_solve_field(args, config)
+        result = subprocess.run(
+            ['solve-field'] + args,
+            capture_output=True,
+            text=True,
+            timeout=config.get('timeout', 120)
+        )
     except subprocess.TimeoutExpired:
         return {'success': False, 'erro': f'Tempo limite excedido ({config["timeout"]}s)'}
-    except FileNotFoundError:
-        return {'success': False, 'erro': f'solve-field não encontrado'}
     except Exception as e:
         return {'success': False, 'erro': f'Erro ao executar solve-field: {e}'}
-    
-    # Verifica se houve erro na execução
-    if result.returncode != 0 and "solved with index" not in result.stdout:
-        return {
-            'success': False, 
-            'erro': f'solve-field retornou erro (código {result.returncode})',
-            'saida': result.stdout + result.stderr
-        }
+    finally:
+        # Limpa o arquivo temporário
+        try:
+            os.unlink(config_path)
+        except:
+            pass
     
     # ============================================================
-    # PASSO 2: Verifica se resolveu
+    # PASSO 5: Verifica se resolveu
     # ============================================================
-    
-    solved_file = f"{fits_path.stem}.solved"
-    wcs_file = f"{fits_path.stem}.wcs"
     
     if not Path(solved_file).exists():
-        if config.get('verbose', True):
-            print("     ⚠️ Não resolveu, tentando fallback com imagem...")
-        return resolver_imagem_direta(fits_path, config)
+        # Verifica se houve algum erro
+        if result.returncode != 0:
+            return {
+                'success': False, 
+                'erro': f'solve-field retornou erro (código {result.returncode})',
+                'saida': result.stdout + result.stderr
+            }
+        else:
+            return {
+                'success': False, 
+                'erro': 'Não foi possível resolver a imagem',
+                'saida': result.stdout + result.stderr
+            }
     
     if config.get('verbose', True):
         print(f"     ✅ Resolvido!")
     
     # ============================================================
-    # PASSO 3: Lê o arquivo WCS
+    # PASSO 6: Lê o arquivo WCS
     # ============================================================
     
     if not Path(wcs_file).exists():
@@ -303,15 +356,23 @@ def resolver_imagem(arquivo_xy, config=None):
             crpix1 = header.get('CRPIX1', 0)
             crpix2 = header.get('CRPIX2', 0)
             
+            # Extrai centro da imagem
             ra_center, dec_center = wcs.all_pix2world([[crpix1, crpix2]], 0)[0]
+            
+            # Extrai informações
             objeto = header.get('OBJECT', 'Desconhecido')
-            pixel_scale = abs(header.get('CDELT1', 0)) * 3600
+            
+            # Calcula escala em arcsec/pixel
+            cdelt1 = header.get('CDELT1', 0)
+            if cdelt1 == 0:
+                cdelt1 = header.get('CD1_1', 0)
+            pixel_scale = abs(cdelt1) * 3600
             
     except Exception as e:
         return {'success': False, 'erro': f'Erro ao ler WCS: {e}'}
     
     # ============================================================
-    # PASSO 4: Retorna o resultado
+    # PASSO 7: Retorna o resultado
     # ============================================================
     
     return {
@@ -323,60 +384,125 @@ def resolver_imagem(arquivo_xy, config=None):
         'arquivos': {
             'wcs': wcs_file,
             'solved': solved_file,
+            'match': match_file,
             'xy': str(xy_path),
             'fits': str(fits_path),
+            'axy_fits': axy_fits,
         },
         'header': dict(header),
     }
 
 
-def gerar_imagem_quads(imagem_path, saida=None, config=None):
+# ============================================================================
+# FUNÇÃO AUXILIAR: Resolver imagem direta (sem .xy)
+# ============================================================================
+
+def resolver_imagem_direta(imagem_path, config=None):
     """
-    Gera uma imagem com os quads desenhados.
+    Resolve uma imagem diretamente (sem usar .xy).
+    Fallback para quando não há arquivo .xy.
     """
-    
     if config is None:
         config = {
-            'indices_dir': 'data',
+            'indices_dir': '/home/dell/Astrometria-PDI/data',
             'scale_low': 0.3,
             'scale_high': 1.0,
+            'width': 1920,
+            'height': 1080,
             'timeout': 120,
+            'verbose': True,
         }
     
+    # Verifica se o solve-field existe
     solve_cmd = encontrar_solve_field()
     if not solve_cmd:
         return {'success': False, 'erro': 'solve-field não encontrado'}
     
-    if saida is None:
-        base = Path(imagem_path).stem
-        saida = f"{base}_quads.pnm"
+    fits_path = Path(imagem_path)
+    if not fits_path.exists():
+        return {'success': False, 'erro': f'Arquivo não encontrado: {imagem_path}'}
+    
+    # Lista os índices
+    indices = listar_indices(config['indices_dir'])
+    if not indices:
+        return {'success': False, 'erro': 'Nenhum arquivo de índice encontrado'}
+    
+    # Cria arquivo de configuração temporário
+    config_file = tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False, dir='/tmp')
+    config_path = config_file.name
+    criar_arquivo_config(indices, config_path)
+    
+    base_name = fits_path.stem
+    solved_file = f"{base_name}.solved"
+    wcs_file = f"{base_name}.wcs"
     
     args = [
-        str(imagem_path),
+        str(fits_path),
+        '--config', config_path,
         '--overwrite',
         '--no-plots',
         '--scale-low', str(config['scale_low']),
         '--scale-high', str(config['scale_high']),
-        '--index-dir', config['indices_dir'],
-        '--pnm', saida,
+        '--solved', solved_file,
+        '--wcs', wcs_file,
         '--new-fits', 'none',
         '--match', 'none',
-        '--wcs', 'none',
         '--corr', 'none',
         '--rdls', 'none',
-        '--solved', 'none'
     ]
     
     try:
-        result = executar_solve_field(args, config)
-        
-        if Path(saida).exists():
-            return {'success': True, 'arquivo': saida}
-        else:
-            return {'success': False, 'erro': 'Arquivo não gerado'}
-            
+        result = subprocess.run(
+            ['solve-field'] + args,
+            capture_output=True,
+            text=True,
+            timeout=config.get('timeout', 120)
+        )
     except Exception as e:
         return {'success': False, 'erro': str(e)}
+    finally:
+        try:
+            os.unlink(config_path)
+        except:
+            pass
+    
+    if not Path(solved_file).exists():
+        return {
+            'success': False,
+            'erro': 'Não foi possível resolver',
+            'saida': result.stdout + result.stderr
+        }
+    
+    # Lê WCS
+    try:
+        with fits.open(wcs_file) as hdul:
+            header = hdul[0].header
+            wcs = WCS(header)
+            
+            crpix1 = header.get('CRPIX1', 0)
+            crpix2 = header.get('CRPIX2', 0)
+            
+            ra_center, dec_center = wcs.all_pix2world([[crpix1, crpix2]], 0)[0]
+            objeto = header.get('OBJECT', 'Desconhecido')
+            cdelt1 = header.get('CDELT1', 0)
+            if cdelt1 == 0:
+                cdelt1 = header.get('CD1_1', 0)
+            pixel_scale = abs(cdelt1) * 3600
+            
+            return {
+                'success': True,
+                'ra': float(ra_center),
+                'dec': float(dec_center),
+                'objeto': str(objeto),
+                'pixel_scale': float(pixel_scale),
+                'arquivos': {
+                    'wcs': wcs_file,
+                    'solved': solved_file,
+                },
+                'header': dict(header),
+            }
+    except Exception as e:
+        return {'success': False, 'erro': f'Erro ao ler WCS: {e}'}
 
 
 # ============================================================================
@@ -409,7 +535,7 @@ if __name__ == "__main__":
         print("-" * 50)
         
         config = {
-            'indices_dir': 'data',
+            'indices_dir': '/home/dell/Astrometria-PDI/data',
             'scale_low': 0.3,
             'scale_high': 1.0,
             'width': 1920,

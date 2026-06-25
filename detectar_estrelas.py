@@ -154,7 +154,7 @@ def detectar_estrelas(imagem, config=None):
 
 def salvar_estrelas_xy(estrelas, arquivo_saida):
     """
-    Salva a lista de estrelas no formato .xy do astrometry.net.
+    Salva a lista de estrelas no formato .xy do astrometry.net (TEXTO SIMPLES).
     
     Formato:
         x y fluxo
@@ -169,7 +169,6 @@ def salvar_estrelas_xy(estrelas, arquivo_saida):
         f.write("# x y fluxo\n")
         for s in estrelas:
             f.write(f"{s['x']:.3f} {s['y']:.3f} {s['fluxo']:.3f}\n")
-
 
 def exibir_info_deteccao(estrelas):
     """
