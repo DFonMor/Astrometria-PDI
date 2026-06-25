@@ -1,14 +1,14 @@
 """
-ler_fits.py - Módulo para leitura de arquivos FITS
+ler_fits.py - Modulo para leitura de arquivos FITS
 
-Este módulo é responsável pela aquisição da imagem.
-Conceitos da disciplina: Aquisição e representação de imagens digitais.
+Este modulo e responsavel pela aquisicao da imagem.
+Conceitos da disciplina: Aquisicao e representacao de imagens digitais.
 
 Funcionalidades:
-    - Leitura de arquivos .fits (formato padrão em astronomia)
-    - Extração da matriz de pixels (dados da imagem)
-    - Extração dos metadados (cabeçalho FITS)
-    - Conversão para float64 e normalização básica
+    - Leitura de arquivos .fits (formato padrao em astronomia)
+    - Extracao da matriz de pixels (dados da imagem)
+    - Extracao dos metadados (cabecalho FITS)
+    - Conversao para float64 e normalizacao basica
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
@@ -22,11 +22,11 @@ from astropy.io.fits import ImageHDU
 
 def carregar_imagem(caminho_arquivo):
     """
-    Carrega uma imagem no formato FITS e retorna seus dados e cabeçalho.
+    Carrega uma imagem no formato FITS e retorna seus dados e cabecalho.
     
-    O formato FITS (Flexible Image Transport System) é o padrão da astronomia.
+    O formato FITS (Flexible Image Transport System) e o padrao da astronomia.
     Ele armazena tanto os dados da imagem (matriz de pixels) quanto metadados
-    como coordenadas, data da observação, exposição, etc.
+    como coordenadas, data da observacao, exposicao, etc.
     
     Args:
         caminho_arquivo (str): Caminho para o arquivo .fits
@@ -34,43 +34,43 @@ def carregar_imagem(caminho_arquivo):
     Returns:
         tuple: (imagem, cabecalho)
             - imagem (numpy.ndarray): Matriz 2D float64 com os pixels normalizados
-            - cabecalho (dict): Dicionário com os metadados do arquivo
+            - cabecalho (dict): Dicionario com os metadados do arquivo
     
     Raises:
-        FileNotFoundError: Se o arquivo não existir
-        ValueError: Se o arquivo não for um FITS válido ou não tiver dados 2D
+        FileNotFoundError: Se o arquivo nao existir
+        ValueError: Se o arquivo nao for um FITS valido ou nao tiver dados 2D
     """
     
     # Verifica se o arquivo existe
     from pathlib import Path
     if not Path(caminho_arquivo).exists():
-        raise FileNotFoundError(f"Arquivo não encontrado: {caminho_arquivo}")
+        raise FileNotFoundError(f"Arquivo nao encontrado: {caminho_arquivo}")
     
     # Abre o arquivo FITS usando a astropy
     # O contexto 'with' garante que o arquivo seja fechado corretamente
     with fits.open(caminho_arquivo) as hdul:
         
         # Pega o primeiro HDU (Header Data Unit)
-        imagem_hdu: ImageHDU = hdul[0] # type: ignore
+        imagem_hdu: ImageHDU = hdul[0]
 
-        # O primeiro extension (HDUL[0]) contém os dados da imagem
+        # O primeiro extension (HDUL[0]) contem os dados da imagem
         dados_raw = imagem_hdu.data 
         
-        # Extrai o cabeçalho (metadados) como dicionário
+        # Extrai o cabecalho (metadados) como dicionario
         cabecalho = dict(imagem_hdu.header) 
         
-        # Verifica se os dados são 2D (imagem) e não 1D ou 3D
+        # Verifica se os dados sao 2D (imagem) e nao 1D ou 3D
         if dados_raw is None:
-            raise ValueError(f"Arquivo {caminho_arquivo} não contém dados de imagem")
+            raise ValueError(f"Arquivo {caminho_arquivo} nao contem dados de imagem")
         
         if dados_raw.ndim != 2:
-            raise ValueError(f"Esperada imagem 2D, mas tem dimensão {dados_raw.ndim}")
+            raise ValueError(f"Esperada imagem 2D, mas tem dimensao {dados_raw.ndim}")
     
     # Converte para float64 para evitar problemas de overflow
-    # e permite operações matemáticas precisas
+    # e permite operacoes matematicas precisas
     imagem = dados_raw.astype(np.float64)
     
-    # Normalização básica: garante que os valores estão no range apropriado
+    # Normalizacao basica: garante que os valores estao no range apropriado
     imagem = normalizar_imagem(imagem)
     
     return imagem, cabecalho
@@ -80,14 +80,14 @@ def normalizar_imagem(imagem):
     """
     Normaliza a imagem para o intervalo [0, 1].
     
-    Esta é uma transformação ponto-a-ponto (conceito da Aula 03).
-    A normalização preserva as relações relativas entre os pixels
-    enquanto permite operações consistentes.
+    Esta e uma transformacao ponto-a-ponto (conceito da Aula 03).
+    A normalizacao preserva as relacoes relativas entre os pixels
+    enquanto permite operacoes consistentes.
 
-    Diferente de imagens JPEG/PNG, os dados FITS são lineares e devem
-    ser preservados como tal para análises científicas (como astrometria).
+    Diferente de imagens JPEG/PNG, os dados FITS sao lineares e devem
+    ser preservados como tais para analises cientificas (como astrometria).
     
-    A fórmula utilizada é: S = (r - r_min) / (r_max - r_min)
+    A formula utilizada e: S = (r - r_min) / (r_max - r_min)
     (conforme visto em sala na Aula 03)
     
     Args:
@@ -103,7 +103,7 @@ def normalizar_imagem(imagem):
     r_min = np.min(imagem)
     r_max = np.max(imagem)
     
-    # Evita divisão por zero se a imagem for constante
+    # Evita divisao por zero se a imagem for constante
     if r_max == r_min:
         return np.zeros_like(imagem)
     
@@ -112,56 +112,54 @@ def normalizar_imagem(imagem):
 
 def obter_metadado_importante(cabecalho, chave, valor_padrao=None):
     """
-    Extrai um metadado específico do cabeçalho FITS de forma segura.
+    Extrai um metadado especifico do cabecalho FITS de forma segura.
     
-    Alguns metadados úteis para esse projeto:
-        - 'EXPTIME': tempo de exposição
-        - 'DATE-OBS': data da observação
-        - 'RA', 'DEC': coordenadas aproximadas (se disponíveis)
+    Alguns metadados uteis para esse projeto:
+        - 'EXPTIME': tempo de exposicao
+        - 'DATE-OBS': data da observacao
+        - 'RA', 'DEC': coordenadas aproximadas (se disponiveis)
     
     Args:
-        cabecalho (dict): Cabeçalho FITS
+        cabecalho (dict): Cabecalho FITS
         chave (str): Chave do metadado (ex: 'EXPTIME')
-        valor_padrao: Valor a retornar se a chave não existir
+        valor_padrao: Valor a retornar se a chave nao existir
     
     Returns:
-        Valor do metadado ou valor_padrao se não encontrado
+        Valor do metadado ou valor_padrao se nao encontrado
     """
     return cabecalho.get(chave, valor_padrao)
 
 
 def exibir_info_imagem(imagem, cabecalho):
     """
-    Exibe informações básicas sobre a imagem carregada (para debug).
+    Exibe informacoes basicas sobre a imagem carregada (para debug).
     
     Args:
         imagem (numpy.ndarray): Imagem carregada
-        cabecalho (dict): Cabeçalho FITS
+        cabecalho (dict): Cabecalho FITS
     """
-    print(f"  Dimensões: {imagem.shape[0]} × {imagem.shape[1]} pixels")
+    print(f"  Dimensoes: {imagem.shape[0]} x {imagem.shape[1]} pixels")
     print(f"  Tipo dos dados: {imagem.dtype}")
     print(f"  Faixa de valores: [{np.min(imagem):.3f}, {np.max(imagem):.3f}]")
-    print(f"  Média: {np.mean(imagem):.3f}")
-    print(f"  Desvio padrão: {np.std(imagem):.3f}")
+    print(f"  Media: {np.mean(imagem):.3f}")
+    print(f"  Desvio padrao: {np.std(imagem):.3f}")
     
-    # Metadados comuns que podem ser úteis
+    # Metadados comuns que podem ser uteis
     exptime = obter_metadado_importante(cabecalho, 'EXPTIME')
     if exptime:
-        print(f"  Tempo de exposição: {exptime} s")
+        print(f"  Tempo de exposicao: {exptime} s")
     
     date_obs = obter_metadado_importante(cabecalho, 'DATE-OBS')
     if date_obs:
-        print(f"  Data da observação: {date_obs}")
+        print(f"  Data da observacao: {date_obs}")
 
     ra = obter_metadado_importante(cabecalho, 'RA')
     if ra:
-        print(f"  Ascenção Reta pelo cabeçalho: {ra}")
-        ra = obter_metadado_importante(cabecalho, 'RA')
+        print(f"  Ascensao Reta: {ra}")
 
     dec = obter_metadado_importante(cabecalho, 'DEC')
     if dec:
-        print(f"  Declinação pelo cabeçalho: {dec}")
-        dec = obter_metadado_importante(cabecalho, 'DEC')
+        print(f"  Declinacao: {dec}")
 
 
 # ============================================================================
@@ -179,10 +177,10 @@ if __name__ == "__main__":
         
         try:
             img, header = carregar_imagem(caminho_teste)
-            print("✅ Imagem carregada com sucesso!")
+            print("Imagem carregada com sucesso!")
             exibir_info_imagem(img, header)
             
         except Exception as e:
-            print(f"❌ Erro ao carregar: {e}")
+            print(f"Erro ao carregar: {e}")
     else:
         print("Uso: python ler_fits.py caminho/para/imagem.fits")

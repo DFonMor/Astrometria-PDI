@@ -1,15 +1,18 @@
 """
-melhorar_imagem.py - Módulo para melhorar a visualização da imagem
+melhorar_imagem.py - Modulo para melhorar a visualizacao da imagem
 
-Este módulo é responsável por preparar a imagem para visualização,
-sem alterar os dados originais usados para detecção.
+Este modulo oferece diferentes metodos para realcar o contraste e a
+visualizacao de imagens astronomicas, mantendo a imagem original intacta
+para fins de deteccao.
 
-Conceitos da disciplina: Melhoria no domínio espacial, transformações
-ponto-a-ponto (Aula 03).
+Conceitos da disciplina: Melhoria no dominio espacial, transformacoes
+ponto-a-ponto (Aula 03), equalizacao de histograma (Aula 08).
 
 Funcionalidades:
-    - Normalização por percentis (como o Astrometry.net)
-    - Visualização otimizada para exibição
+    - Normalizacao por percentis (padrao Astrometry.net)
+    - Equalizacao de histograma (global)
+    - CLAHE (Contrast Limited Adaptive Histogram Equalization)
+    - Stretching com saturacao de percentis personalizados
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
@@ -17,99 +20,120 @@ Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import numpy as np
+from skimage import exposure, filters
 
 
 def pre_processar(imagem, config=None):
     """
-    Prepara a imagem para visualização usando normalização por percentis.
-    
-    Esta função é usada APENAS para visualização. A detecção de estrelas
-    deve ser feita na imagem original (sem normalização).
-    
-    Fluxo:
-        1. Garante que a imagem está em float64
-        2. Aplica normalização por percentis (10%-95%)
-        3. Retorna imagem no range [0, 1] para exibição
-    
-    Args:
-        imagem (numpy.ndarray): Imagem de entrada (pode ser qualquer escala)
-        config (dict, optional): Parâmetros de configuração.
-    
-    Returns:
-        numpy.ndarray: Imagem visualizável (float64, range [0, 1])
+    Prepara a imagem para visualizacao usando normalizacao por percentis.
     """
-    
-    # Configurações padrão
+    # Configuracoes padrao (usadas se nao for passado um config)
     if config is None:
         config = {
-            'low_percent': 10,      # Percentil inferior (10% = padrão do teste)
-            'high_percent': 95,     # Percentil superior (95% = padrão do teste)
+            'low_percent': 5,
+            'high_percent': 95,
         }
     
-    # Passo 1: Garantir que a imagem está em float64
     if imagem.dtype != np.float64:
         imagem = imagem.astype(np.float64)
     
-    # Passo 2: Normalização por percentis
     imagem = normalizar_por_percentil(
         imagem,
         low_percent=config['low_percent'],
         high_percent=config['high_percent']
     )
     
+    # CLAHE opcional (se configurado)
+    if config.get('use_clahe', False):
+        from skimage import exposure
+        imagem = exposure.equalize_adapthist(
+            imagem, 
+            clip_limit=config.get('clahe_clip_limit', 0.02)
+        )
+    
     return imagem
 
+def normalizar_linear(imagem):
+    """Normalizacao linear min-max."""
+    min_val = np.min(imagem)
+    max_val = np.max(imagem)
+    if max_val == min_val:
+        return np.zeros_like(imagem)
+    return (imagem - min_val) / (max_val - min_val)
 
-def normalizar_por_percentil(imagem, low_percent=10, high_percent=95):
+
+def normalizar_por_percentil(imagem, low_percent=5, high_percent=99):
     """
-    Normaliza a imagem usando percentis (como o Astrometry.net).
+    Normalizacao por percentis (mais agressiva para realcar estrelas).
     
-    Esta é a abordagem utilizada pelo Astrometry.net (an-fitstopnm).
-    Os valores abaixo do percentil inferior tornam-se 0 (preto),
-    os valores acima do percentil superior tornam-se 1 (branco).
-    
-    Args:
-        imagem (numpy.ndarray): Imagem de entrada
-        low_percent (int): Percentil inferior (padrão: 10)
-        high_percent (int): Percentil superior (padrão: 95)
-    
-    Returns:
-        numpy.ndarray: Imagem normalizada no intervalo [0, 1]
+    Valores abaixo do percentil inferior viram 0 (preto),
+    valores acima do percentil superior viram 1 (branco).
     """
-    # Calcula os percentis
     low = np.percentile(imagem, low_percent)
     high = np.percentile(imagem, high_percent)
     
-    # Evita divisão por zero
     if high == low:
         return np.zeros_like(imagem)
     
-    # Recorta valores fora do intervalo
     imagem = np.clip(imagem, low, high)
-    
-    # Normaliza para [0, 1]
     return (imagem - low) / (high - low)
 
 
-def exibir_info_processamento(imagem_original, imagem_processada):
+def equalizar_histograma(imagem):
     """
-    Exibe informações sobre o pré-processamento (para debug).
+    Equalizacao de histograma global (Aula 08).
+    """
+    return exposure.equalize_hist(imagem)
+
+
+def aplicar_clahe(imagem, clip_limit=0.03, tile_size=8):
+    """
+    CLAHE (Contrast Limited Adaptive Histogram Equalization).
     
-    Args:
-        imagem_original (numpy.ndarray): Imagem original
-        imagem_processada (numpy.ndarray): Imagem após pré-processamento
+    Aula 08 - slides 18-19.
     """
-    print("  Pré-processamento (visualização):")
+    return exposure.equalize_adapthist(
+        imagem,
+        clip_limit=clip_limit,
+        kernel_size=(tile_size, tile_size)
+    )
+
+
+def aplicar_stretch(imagem, config):
+    """
+    Stretching com saturacao de percentis e ajuste de gama.
+    """
+    low_percent = config.get('low_percent', 5)
+    high_percent = config.get('high_percent', 99)
+    low = np.percentile(imagem, low_percent)
+    high = np.percentile(imagem, high_percent)
+    
+    if high == low:
+        return np.zeros_like(imagem)
+    
+    imagem = np.clip(imagem, low, high)
+    imagem = (imagem - low) / (high - low)
+    return imagem
+
+
+def aplicar_gamma(imagem, gamma=0.8):
+    """Correcao gamma (Aula 03 - slides 8-9)."""
+    return exposure.adjust_gamma(imagem, gamma)
+
+
+def exibir_info_processamento(imagem_original, imagem_processada):
+    """Exibe informacoes sobre o pre-processamento."""
+    print("  Pre-processamento (visualizacao):")
     print(f"    Original: min={np.min(imagem_original):.3f}, "
           f"max={np.max(imagem_original):.3f}, "
-          f"média={np.mean(imagem_original):.3f}")
+          f"media={np.mean(imagem_original):.3f}")
     print(f"    Processada: min={np.min(imagem_processada):.3f}, "
           f"max={np.max(imagem_processada):.3f}, "
-          f"média={np.mean(imagem_processada):.3f}")
+          f"media={np.mean(imagem_processada):.3f}")
 
 
 # ============================================================================
-# TESTE (executado apenas se rodar este arquivo diretamente)
+# TESTE
 # ============================================================================
 
 if __name__ == "__main__":
@@ -119,38 +143,34 @@ if __name__ == "__main__":
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
-        print(f"Testando visualização: {caminho_teste}")
+        print(f"Testando visualizacao com multiplos metodos: {caminho_teste}")
         print("-" * 50)
         
         try:
-            # Carrega a imagem (crua, sem modificações)
             img, header = carregar_imagem(caminho_teste)
-            print(f"Imagem original: {img.shape[0]} × {img.shape[1]} pixels")
             
-            # Apenas para visualização
-            img_vis = pre_processar(img)
+            # Testa diferentes metodos
+            metodos = [
+                {'metodo': 'percentis', 'low_percent': 5, 'high_percent': 99},
+                {'metodo': 'equalizacao'},
+                {'metodo': 'clahe', 'clahe_clip_limit': 0.03},
+                {'metodo': 'percentis', 'low_percent': 10, 'high_percent': 95},
+            ]
             
-            print(f"\nImagem visualizável: {img_vis.shape[0]} × {img_vis.shape[1]} pixels")
-            print(f"  Min: {np.min(img_vis):.3f}, Max: {np.max(img_vis):.3f}")
-            print(f"  Média: {np.mean(img_vis):.3f}")
+            fig, axes = plt.subplots(2, 2, figsize=(12, 12))
+            axes = axes.flatten()
             
-            # Mostra a imagem limpa (sem marcações)
-            fig, ax = plt.subplots(1, 1, figsize=(12, 10))
-            
-            ax.imshow(img_vis, cmap='gray', origin='lower')
-            ax.set_xlim(0, img_vis.shape[1])
-            ax.set_ylim(0, img_vis.shape[0])
-            
-            ax.set_title(f'Visualização com percentis 10%-95%')
-            ax.axis('off')
+            for i, cfg in enumerate(metodos):
+                img_proc = pre_processar(img, cfg)
+                axes[i].imshow(img_proc, cmap='gray', origin='lower')
+                axes[i].set_title(f"{cfg['metodo']} {cfg.get('low_percent', '')} {cfg.get('high_percent', '')}")
+                axes[i].axis('off')
             
             plt.tight_layout()
             plt.show()
             
-            print("\n✅ Visualização concluída!")
-            
         except Exception as e:
-            print(f"❌ Erro: {e}")
+            print(f"Erro: {e}")
             import traceback
             traceback.print_exc()
     else:
