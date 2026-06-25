@@ -319,8 +319,6 @@ Em resumo, este projeto demonstrou a aplicação prática dos fundamentos de Pro
 
 ## Referências
 
-## Referências
-
 LANG, D.; HOGG, D. W.; MIERLE, K.; BLANTON, M.; ROWEIS, S. Astrometry.net: Blind astrometric calibration of arbitrary astronomical images. *The Astronomical Journal*, v. 139, n. 5, p. 1782-1800, 2010.
 
 ASTROPY. *Astropy: A community Python package for Astronomy*. Disponível em: https://www.astropy.org. Acesso em: 25 jun. 2026.

@@ -40,9 +40,9 @@ def fov_height_arcmin():
 # ============================================================================
 
 CONFIG_VISUALIZACAO = {
-    'low_percent': 5,          # Percentil inferior (5 = mais contraste)
-    'high_percent': 90,        # Percentil superior (90 = mais contraste)
-    'use_clahe': False,        # True para usar CLAHE (contraste local)
+    'low_percent': 30,          # Percentil inferior (5 = mais contraste)
+    'high_percent': 99,        # Percentil superior (90 = mais contraste)
+    'use_clahe': True,        # True para usar CLAHE (contraste local)
     'clahe_clip_limit': 0.02,  # Limite de contraste do CLAHE
 }
 
