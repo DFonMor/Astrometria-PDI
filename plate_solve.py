@@ -3,8 +3,6 @@ plate_solve.py - Módulo para resolução astrométrica usando solve-field
 
 Este módulo utiliza as estrelas detectadas (arquivo .xy) e chama o solve-field
 para identificar o campo estelar da imagem.
-
-Conceitos da disciplina: Reconhecimento de padrões (nível alto).
 """
 
 import subprocess
@@ -25,10 +23,8 @@ def converter_caminho_wsl(caminho):
     if not caminho:
         return caminho
     
-    # Converte para string e substitui barras invertidas
     caminho = str(caminho).replace('\\', '/')
     
-    # Converte D:/pasta -> /mnt/d/pasta
     if len(caminho) > 1 and caminho[1] == ':':
         drive = caminho[0].lower()
         caminho = f"/mnt/{drive}{caminho[2:]}"
@@ -39,16 +35,11 @@ def converter_caminho_wsl(caminho):
 def encontrar_solve_field():
     """
     Encontra o executável solve-field no sistema.
-    No WSL, retorna 'wsl' para executar via WSL interop.
-    
-    Returns:
-        str: Comando para executar solve-field ou None se não encontrado
     """
     # Verifica se está no WSL
     is_wsl = 'WSLENV' in os.environ or 'WSL_DISTRO_NAME' in os.environ
     
     if is_wsl:
-        # Estamos no WSL, podemos executar diretamente
         if shutil.which('solve-field'):
             return 'solve-field'
         else:
@@ -56,10 +47,8 @@ def encontrar_solve_field():
     
     # Verifica se está no Windows (usando WSL interop)
     if platform.system() == 'Windows':
-        # Tenta encontrar o wsl.exe
         wsl_path = shutil.which('wsl')
         if wsl_path:
-            # Testa se solve-field existe no WSL
             try:
                 result = subprocess.run(
                     ['wsl', 'which', 'solve-field'],
@@ -67,11 +56,10 @@ def encontrar_solve_field():
                     text=True
                 )
                 if result.returncode == 0 and result.stdout.strip():
-                    return 'wsl'  # Vai usar 'wsl solve-field ...'
+                    return 'wsl'
             except:
                 pass
     
-    # Último recurso: tenta diretamente (pode falhar)
     if shutil.which('solve-field'):
         return 'solve-field'
     
@@ -81,13 +69,6 @@ def encontrar_solve_field():
 def executar_solve_field(args, config=None):
     """
     Executa o solve-field, adaptando para o ambiente (WSL ou Windows).
-    
-    Args:
-        args (list): Argumentos para o solve-field
-        config (dict): Configuração
-    
-    Returns:
-        subprocess.CompletedProcess: Resultado da execução
     """
     solve_cmd = encontrar_solve_field()
     
@@ -96,22 +77,17 @@ def executar_solve_field(args, config=None):
     
     # Se estiver no Windows e o comando for 'wsl', converte caminhos
     if platform.system() == 'Windows' and solve_cmd == 'wsl':
-        # Converte TODOS os argumentos que parecem caminhos
         args_convertidos = []
         for arg in args:
             if isinstance(arg, str):
-                # Se parece um caminho (tem /, \ ou :) converte
                 if '/' in arg or '\\' in arg or ':' in arg:
                     arg = converter_caminho_wsl(arg)
             args_convertidos.append(arg)
         
-        # Monta o comando completo
         cmd = ['wsl', 'solve-field'] + args_convertidos
     else:
-        # Execução direta (Linux/Mac ou WSL)
         cmd = ['solve-field'] + args
     
-    # Executa
     timeout = config.get('timeout', 120) + 10 if config else 130
     return subprocess.run(
         cmd,
@@ -124,13 +100,6 @@ def executar_solve_field(args, config=None):
 def resolver_imagem_direta(imagem_path, config=None):
     """
     Fallback: resolve a imagem diretamente (sem arquivo .xy).
-    
-    Args:
-        imagem_path (str): Caminho para o arquivo .fits
-        config (dict, optional): Parâmetros de configuração.
-    
-    Returns:
-        dict: Resultado da resolução
     """
     if imagem_path is None or not Path(imagem_path).exists():
         return {'success': False, 'erro': 'Falha no fallback: imagem não encontrada'}
@@ -206,13 +175,6 @@ def resolver_imagem_direta(imagem_path, config=None):
 def resolver_imagem(arquivo_xy, config=None):
     """
     Resolve uma imagem usando o arquivo .xy com as estrelas detectadas.
-    
-    Args:
-        arquivo_xy (str): Caminho para o arquivo .xy com as estrelas
-        config (dict, optional): Parâmetros de configuração.
-    
-    Returns:
-        dict: Resultado da resolução
     """
     
     if config is None:
@@ -242,20 +204,17 @@ def resolver_imagem(arquivo_xy, config=None):
     
     # Procura o arquivo .fits correspondente
     fits_path = None
-    # Tenta na mesma pasta com mesmo nome
     for ext in ['.fits', '.fit', '.FITS']:
         possivel_fits = xy_path.parent / f"{xy_path.stem}{ext}"
         if possivel_fits.exists():
             fits_path = possivel_fits
             break
     
-    # Se não encontrou, procura na pasta pai
     if not fits_path:
         possivel_fits = Path("teste.fits")
         if possivel_fits.exists():
             fits_path = possivel_fits
     
-    # Se ainda não encontrou, procura qualquer .fits na pasta atual
     if not fits_path:
         fits_files = list(Path(".").glob("*.fits"))
         if fits_files:
@@ -264,30 +223,22 @@ def resolver_imagem(arquivo_xy, config=None):
     if not fits_path:
         return {'success': False, 'erro': 'Arquivo .fits correspondente não encontrado'}
     
-    # IMPORTANTE: Copia o .xy para a mesma pasta da imagem com o mesmo nome base
-    # O solve-field procura automaticamente por um arquivo .xy com o mesmo nome
-    xy_destino = fits_path.parent / f"{fits_path.stem}.xy"
-    
-    # Se o .xy está em outra pasta, copia para a pasta da imagem
-    if xy_path != xy_destino:
-        if config.get('verbose', True):
-            print(f"     Copiando {xy_path} para {xy_destino}")
-        shutil.copy2(xy_path, xy_destino)
-    
     if config.get('verbose', True):
         print(f"  🔭 Resolvendo imagem: {fits_path.name}")
-        print(f"     Usando lista de estrelas: {xy_destino.name}")
+        print(f"     Usando lista de estrelas: {xy_path.name}")
         print(f"     Índices: {config['indices_dir']}")
         print(f"     Escala: {config['scale_low']}° - {config['scale_high']}°")
         print(f"     Dimensões: {config['width']} x {config['height']} px")
         print(f"     solve-field via: {solve_cmd}")
     
     # ============================================================
-    # PASSO 1: Executa o solve-field APENAS com a imagem
+    # PASSO 1: Executa o solve-field com a imagem E o arquivo .xy
+    # Usando o formato que funcionou no teste manual
     # ============================================================
     
     args = [
-        str(fits_path),   # Apenas a imagem!
+        str(fits_path),  # Imagem primeiro
+        '--keep-xylist', str(xy_path),  # Salva a lista de estrelas
         '--overwrite',
         '--no-plots',
         '--scale-low', str(config['scale_low']),
@@ -315,7 +266,7 @@ def resolver_imagem(arquivo_xy, config=None):
         return {'success': False, 'erro': f'Erro ao executar solve-field: {e}'}
     
     # Verifica se houve erro na execução
-    if result.returncode != 0:
+    if result.returncode != 0 and "solved with index" not in result.stdout:
         return {
             'success': False, 
             'erro': f'solve-field retornou erro (código {result.returncode})',
@@ -331,7 +282,7 @@ def resolver_imagem(arquivo_xy, config=None):
     
     if not Path(solved_file).exists():
         if config.get('verbose', True):
-            print("     ⚠️ Não resolveu com .xy, tentando fallback com imagem...")
+            print("     ⚠️ Não resolveu, tentando fallback com imagem...")
         return resolver_imagem_direta(fits_path, config)
     
     if config.get('verbose', True):
@@ -372,7 +323,7 @@ def resolver_imagem(arquivo_xy, config=None):
         'arquivos': {
             'wcs': wcs_file,
             'solved': solved_file,
-            'xy': str(xy_destino),
+            'xy': str(xy_path),
             'fits': str(fits_path),
         },
         'header': dict(header),
@@ -382,14 +333,6 @@ def resolver_imagem(arquivo_xy, config=None):
 def gerar_imagem_quads(imagem_path, saida=None, config=None):
     """
     Gera uma imagem com os quads desenhados.
-    
-    Args:
-        imagem_path (str): Caminho para o arquivo .fits
-        saida (str, optional): Caminho para o arquivo de saída (.pnm ou .png)
-        config (dict, optional): Parâmetros de configuração.
-    
-    Returns:
-        dict: Resultado com caminho do arquivo gerado
     """
     
     if config is None:
@@ -447,13 +390,10 @@ if __name__ == "__main__":
     if len(sys.argv) > 1:
         entrada = sys.argv[1]
         
-        # Se for um .fits, procura o .xy correspondente
         if entrada.endswith('.fits'):
-            # Tenta encontrar o .xy
             fits_path = Path(entrada)
             xy_path = fits_path.parent / f"{fits_path.stem}.xy"
             
-            # Se não existir, tenta na pasta saidas_teste
             if not xy_path.exists():
                 xy_path = Path("saidas_teste") / "estrelas.xy"
             
