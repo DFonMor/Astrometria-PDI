@@ -24,18 +24,18 @@ from PIL import Image
 from io import BytesIO
 
 
-def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabecalho=None, tempo_total=None):
+def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabecalho=None, tempo_total=None, config=None):
     """
     Exibe os resultados do processamento com visualização gráfica.
-    
-    Args:
-        resultado_solve (dict): Resultado do plate solving
-        estrelas (list): Lista de estrelas detectadas
-        img_vis (numpy.ndarray): Imagem melhorada (para visualização)
-        img_original (numpy.ndarray, optional): Imagem original (crua)
-        cabecalho (dict, optional): Cabeçalho FITS para comparar RA/Dec
-        tempo_total (float, optional): Tempo total de processamento
     """
+    
+    if config is None:
+        config = {
+            'salvar_imagens': True,
+            'pasta_saida': 'resultados',
+            'mostrar_imagens': True,
+            'max_estrelas_mostrar': 50,
+        }
     
     # ============================================================
     # 1. EXIBE INFORMAÇÕES NO CONSOLE
@@ -51,20 +51,13 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
         print(f"     🌟 Mais brilhante: fluxo={s_mais['fluxo']:.1f}, "
               f"posição=({s_mais['x']:.1f}, {s_mais['y']:.1f})px")
     
-    # ============================================================
-    # 2. EXIBE COORDENADAS (HEADER vs RESOLVIDO)
-    # ============================================================
-    
-    # Coordenadas do cabeçalho (Seestar)
+    # Coordenadas
     ra_header = cabecalho.get('RA') if cabecalho else None
     dec_header = cabecalho.get('DEC') if cabecalho else None
-    
-    # Coordenadas resolvidas
     ra_solve = resultado_solve.get('ra') if resultado_solve.get('success') else None
     dec_solve = resultado_solve.get('dec') if resultado_solve.get('success') else None
     
     print(f"\n  📍 COORDENADAS:")
-    
     if ra_header is not None and dec_header is not None:
         print(f"     Cabeçalho (Seestar): RA={ra_header:.6f}°, Dec={dec_header:.6f}°")
     else:
@@ -72,10 +65,8 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     
     if ra_solve is not None and dec_solve is not None:
         print(f"     Resolvido (solve-field): RA={ra_solve:.6f}°, Dec={dec_solve:.6f}°")
-        
-        # Calcula diferença
         if ra_header is not None and dec_header is not None:
-            diff_ra = (ra_solve - float(ra_header)) * 3600  # em segundos de arco
+            diff_ra = (ra_solve - float(ra_header)) * 3600
             diff_dec = (dec_solve - float(dec_header)) * 3600
             print(f"     Diferença: ΔRA={diff_ra:.2f}\", ΔDec={diff_dec:.2f}\"")
     else:
@@ -96,27 +87,24 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     print(f"{'='*60}\n")
     
     # ============================================================
-    # 3. CRIA IMAGEM COM ESTRELAS
+    # 2. IMAGENS
     # ============================================================
     
-    img_estrelas = criar_imagem_estrelas_matplotlib(img_vis, estrelas)
+    if not config.get('mostrar_imagens', True):
+        return
     
-    # ============================================================
-    # 4. EXIBE AS IMAGENS
-    # ============================================================
+    max_estrelas = config.get('max_estrelas_mostrar', 50)
+    img_estrelas = criar_imagem_estrelas_matplotlib(img_vis, estrelas, max_estrelas)
     
-    n_imagens = 2  # melhorada + estrelas
+    n_imagens = 2
     if img_original is not None:
         n_imagens = 3
     
     fig, axes = plt.subplots(1, n_imagens, figsize=(n_imagens * 5, 5))
-    
     if n_imagens == 1:
         axes = [axes]
     
     idx = 0
-    
-    # Imagem 1: Original (se disponível)
     if img_original is not None:
         img_orig_norm = (img_original - np.min(img_original)) / (np.max(img_original) - np.min(img_original) + 1e-10)
         axes[idx].imshow(img_orig_norm, cmap='gray', origin='lower', vmin=0, vmax=1)
@@ -124,13 +112,11 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
         axes[idx].axis('off')
         idx += 1
     
-    # Imagem 2: Melhorada
     axes[idx].imshow(img_vis, cmap='gray', origin='lower')
     axes[idx].set_title("Imagem Melhorada", fontsize=12)
     axes[idx].axis('off')
     idx += 1
     
-    # Imagem 3: Com estrelas marcadas
     axes[idx].imshow(img_estrelas, origin='lower')
     axes[idx].set_title("Estrelas Detectadas", fontsize=12)
     axes[idx].axis('off')
@@ -139,10 +125,13 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     plt.show()
     
     # ============================================================
-    # 5. SALVA AS IMAGENS
+    # 3. SALVA IMAGENS
     # ============================================================
     
-    pasta_saida = Path("resultados")
+    if not config.get('salvar_imagens', True):
+        return
+    
+    pasta_saida = Path(config.get('pasta_saida', 'resultados'))
     pasta_saida.mkdir(exist_ok=True)
     
     nome_base = "resultado"
@@ -153,7 +142,6 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     fig.savefig(caminho_figura, dpi=150, bbox_inches='tight', facecolor='black')
     print(f"💾 Visualização salva em: {caminho_figura}")
     
-    # Salva imagens individuais
     if img_original is not None:
         plt.imsave(pasta_saida / f"{nome_base}_original.png", img_orig_norm, cmap='gray', origin='lower', vmin=0, vmax=1)
     
@@ -161,15 +149,11 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     plt.imsave(pasta_saida / f"{nome_base}_estrelas.png", img_estrelas, origin='lower')
     
     print(f"💾 Imagens individuais salvas em: {pasta_saida}")
-    
     plt.close(fig)
 
 
 def criar_imagem_estrelas_matplotlib(img_vis, estrelas, max_estrelas=50):
-    """
-    Cria uma imagem com as estrelas marcadas usando matplotlib.
-    Retorna um array RGB com a orientação corrigida.
-    """
+    """Cria imagem com estrelas marcadas."""
     height, width = img_vis.shape
     
     fig, ax = plt.subplots(1, 1, figsize=(width/100, height/100), dpi=100)
@@ -199,8 +183,6 @@ def criar_imagem_estrelas_matplotlib(img_vis, estrelas, max_estrelas=50):
     
     img_array = np.array(Image.open(buf))
     plt.close(fig)
-    
-    # Inverte verticalmente
     img_array = np.flipud(img_array)
     
     return img_array
