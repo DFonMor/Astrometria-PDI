@@ -1,12 +1,16 @@
 """
 main.py - Sistema de Astrometria para identificação de campos estrelados
 
-Pipeline:
-    1. Leitura do FITS (ler_fits)
-    2. Visualização (melhorar_imagem) - apenas para exibição
-    3. Detecção de estrelas (detectar_estrelas) - com photutils
-    4. Plate solving (plate_solve) - com solve-field
-    5. Exibição do resultado (exibir_resultado)
+Pipeline de processamento:
+    Leitura do FITS (ler_fits)
+    Visualização (melhorar_imagem) - apenas para exibição
+    Detecção de estrelas (detectar_estrelas) - com photutils
+    Plate solving (plate_solve) - com solve-field
+    Exibição do resultado (exibir_resultado)
+    
+Autor: Eduardo Fonseca Morato
+Contato: morato@alunos.utfpr.edu.br
+Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import sys
@@ -46,7 +50,7 @@ def processar_imagem(caminho_arquivo):
     Executa o pipeline completo de processamento para uma imagem
     """
     print(f"\n{'='*60}")
-    print(f"🔭 PROCESSANDO: {Path(caminho_arquivo).name}")
+    print(f"Processando: {Path(caminho_arquivo).name}")
     print(f"{'='*60}\n")
     
     inicio_total = time.time()
@@ -55,44 +59,44 @@ def processar_imagem(caminho_arquivo):
     base_name = Path(caminho_arquivo).stem
     
     # ============================================================
-    # BLOCO 1: Aquisição
+    # Aquisição
     # ============================================================
     print("[1/5] Carregando imagem...")
     imagem, cabecalho = carregar_imagem(caminho_arquivo)
-    print(f"     → {imagem.shape[0]} × {imagem.shape[1]} pixels")
+    print(f"     -> {imagem.shape[0]} x {imagem.shape[1]} pixels")
     
     # ============================================================
-    # BLOCO 2: Visualização (apenas para exibição)
+    # Visualização (apenas para exibição)
     # ============================================================
     print("[2/5] Preparando visualização...")
     img_vis = pre_processar(imagem, CONFIG_VISUALIZACAO)
     exibir_info_processamento(imagem, img_vis)
     
     # ============================================================
-    # BLOCO 3: Detecção de estrelas (com photutils)
+    # Detecção de estrelas (com photutils)
     # ============================================================
     print("[3/5] Detectando estrelas...")
     estrelas = detectar_estrelas(imagem, CONFIG_DETECCAO)
     exibir_info_deteccao(estrelas)
     
     if len(estrelas) < 5:
-        print("     → ⚠️ Poucas estrelas detectadas. Abortando.")
+        print("     -> Poucas estrelas detectadas. Abortando.")
         return None
     
     # Salva estrelas no formato .xy com o mesmo nome base
     xy_file = f"{base_name}.xy"
     salvar_estrelas_xy(estrelas, xy_file)
-    print(f"     → 💾 Estrelas salvas em: {xy_file}")
+    print(f"     -> Estrelas salvas em: {xy_file}")
     
     # ============================================================
-    # BLOCO 4: Plate Solving (solve-field)
+    # Plate Solving (solve-field)
     # ============================================================
     print("[4/5] Resolvendo campo...")
     
     # Verifica se o arquivo .xy existe
     xy_path = Path(xy_file)
     if not xy_path.exists():
-        print(f"     → ❌ Arquivo {xy_file} não encontrado!")
+        print(f"     -> Arquivo {xy_file} nao encontrado!")
         return None
     
     # Tenta resolver usando o .xy
@@ -100,14 +104,14 @@ def processar_imagem(caminho_arquivo):
     
     # Se falhou com .xy, tenta com a imagem diretamente
     if not resultado_solve.get('success', False):
-        print("     → ⚠️ Falha com .xy, tentando com a imagem diretamente...")
+        print("     -> Falha com .xy, tentando com a imagem diretamente...")
         resultado_solve = resolver_imagem_direta(caminho_arquivo, CONFIG_PLATE_SOLVE)
     
     # ============================================================
-    # BLOCO 5: Saída
+    # Saída
     # ============================================================
     tempo_total = time.time() - inicio_total
-    print("[5/5] Gerando saída...")
+    print("[5/5] Gerando saida...")
     
     # Exibe o resultado com as imagens
     exibir_resultado(
@@ -136,7 +140,7 @@ def main():
     """Ponto de entrada do programa"""
     
     parser = argparse.ArgumentParser(
-        description='Sistema de Astrometria para identificação de campos estrelados',
+        description='Sistema de Astrometria para identificacao de campos estrelados',
         epilog=f'Exemplo: python {sys.argv[0]} imagem.fits'
     )
     
@@ -155,13 +159,13 @@ def main():
     parser.add_argument(
         '--info',
         action='store_true',
-        help='Exibe informações do telescópio'
+        help='Exibe informacoes do telescopio'
     )
     
     parser.add_argument(
         '--no-viz',
         action='store_true',
-        help='Não exibe visualização das estrelas'
+        help='Nao exibe visualizacao das estrelas'
     )
     
     args = parser.parse_args()
@@ -169,15 +173,15 @@ def main():
     # Modo info
     if args.info:
         print(f"\n{'='*50}")
-        print("CONFIGURAÇÃO DO TELESCÓPIO")
+        print("CONFIGURACAO DO TELESCOPIO")
         print(f"{'='*50}")
         print(f"Modelo: Seestar S50")
-        print(f"Distância focal: {FOCAL_LENGTH_MM} mm")
-        print(f"Tamanho do pixel: {PIXEL_SIZE_UM} µm")
-        print(f"Resolução: {SENSOR_WIDTH_PX} × {SENSOR_HEIGHT_PX} px")
+        print(f"Distancia focal: {FOCAL_LENGTH_MM} mm")
+        print(f"Tamanho do pixel: {PIXEL_SIZE_UM} um")
+        print(f"Resolucao: {SENSOR_WIDTH_PX} x {SENSOR_HEIGHT_PX} px")
         print(f"Escala de placa: {escala_arcsec_px():.2f} arcsec/px")
-        print(f"Campo de visão: {fov_width_arcmin():.1f}' × {fov_height_arcmin():.1f}'")
-        print(f"Índices recomendados: 4107, 5206")
+        print(f"Campo de visao: {fov_width_arcmin():.1f}' x {fov_height_arcmin():.1f}'")
+        print(f"Indices recomendados: 4107, 5206")
         print(f"{'='*50}\n")
         return
     
@@ -185,19 +189,19 @@ def main():
     if args.test:
         caminho = "teste.fits"
         if not Path(caminho).exists():
-            print(f"Erro: Imagem de teste não encontrada: {caminho}")
+            print(f"Erro: Imagem de teste nao encontrada: {caminho}")
             print("Coloque um arquivo teste.fits na pasta do projeto.")
             return
     else:
         if not args.imagem:
             parser.print_help()
-            print("\n⚠️ Forneça o caminho da imagem ou use --test ou --info")
+            print("\nForneca o caminho da imagem ou use --test ou --info")
             return
         caminho = args.imagem
     
     # Verifica se o arquivo existe
     if not Path(caminho).exists():
-        print(f"Erro: Arquivo não encontrado: {caminho}")
+        print(f"Erro: Arquivo nao encontrado: {caminho}")
         return
     
     # Executa o processamento
@@ -207,18 +211,18 @@ def main():
         if resultado:
             print(f"\n{'='*60}")
             if resultado['resultado_solve'].get('success', False):
-                print("✅ PIPELINE CONCLUÍDO COM SUCESSO!")
+                print("Pipeline concluido com sucesso!")
             else:
-                print("⚠️ PIPELINE CONCLUÍDO, MAS A IMAGEM NÃO FOI RESOLVIDA")
-                print("   Verifique os índices, a escala ou a qualidade da imagem.")
+                print("Pipeline concluido, mas a imagem nao foi resolvida")
+                print("   Verifique os indices, a escala ou a qualidade da imagem.")
             print(f"{'='*60}")
         else:
-            print("\n❌ Falha no processamento da imagem")
+            print("\nFalha no processamento da imagem")
             
     except KeyboardInterrupt:
-        print("\n\n⚠️ Processamento interrompido pelo usuário.")
+        print("\n\nProcessamento interrompido pelo usuario.")
     except Exception as e:
-        print(f"\n❌ Erro durante o processamento: {e}")
+        print(f"\nErro durante o processamento: {e}")
         import traceback
         traceback.print_exc()
 

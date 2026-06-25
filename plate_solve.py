@@ -1,15 +1,19 @@
 """
-plate_solve.py - Módulo para resolução astrométrica usando solve-field (versão 0.93)
+plate_solve.py - Modulo para resolucao astrometrica usando solve-field (versao 0.93)
 
-Este módulo utiliza as estrelas detectadas (arquivo .xy) e chama o solve-field
+Este modulo utiliza as estrelas detectadas (arquivo .xy) e chama o solve-field
 para identificar o campo estelar da imagem.
 
 Funcionalidades:
     - Converte .xy para FITS BINTABLE
-    - Lista arquivos de índice
-    - Cria arquivo de configuração temporário
+    - Lista arquivos de indice
+    - Cria arquivo de configuracao temporario
     - Executa solve-field com --config
-    - Lê e interpreta WCS
+    - Le e interpreta WCS
+    
+Autor: Eduardo Fonseca Morato
+Contato: morato@alunos.utfpr.edu.br
+Disciplina: ELTD2 - Processamento de Imagens UTFPR
 """
 
 import subprocess
@@ -24,14 +28,14 @@ import numpy as np
 
 
 def encontrar_solve_field():
-    """Encontra o executável solve-field no sistema."""
+    """Encontra o executavel solve-field no sistema."""
     if shutil.which('solve-field'):
         return 'solve-field'
     return None
 
 
 def listar_indices(diretorio):
-    """Lista todos os arquivos de índice no diretório."""
+    """Lista todos os arquivos de indice no diretorio."""
     diretorio = Path(diretorio)
     if not diretorio.exists():
         return []
@@ -41,7 +45,7 @@ def listar_indices(diretorio):
 
 
 def criar_arquivo_config(indices, arquivo_config):
-    """Cria um arquivo de configuração para o solve-field."""
+    """Cria um arquivo de configuracao para o solve-field."""
     with open(arquivo_config, 'w') as f:
         f.write("# Config file for astrometry-engine\n")
         for idx in indices:
@@ -52,7 +56,7 @@ def converter_xy_para_fits(arquivo_xy, arquivo_saida=None):
     """Converte um arquivo .xy para FITS BINTABLE."""
     xy_path = Path(arquivo_xy)
     if not xy_path.exists():
-        raise FileNotFoundError(f"Arquivo .xy não encontrado: {arquivo_xy}")
+        raise FileNotFoundError(f"Arquivo .xy nao encontrado: {arquivo_xy}")
     
     if arquivo_saida is None:
         arquivo_saida = xy_path.parent / f"{xy_path.stem}.axy.fits"
@@ -74,7 +78,7 @@ def converter_xy_para_fits(arquivo_xy, arquivo_saida=None):
                     continue
     
     if not dados:
-        raise ValueError("Nenhum dado válido encontrado no arquivo .xy")
+        raise ValueError("Nenhum dado valido encontrado no arquivo .xy")
     
     dtype = [('X', 'f8'), ('Y', 'f8'), ('FLUX', 'f8')]
     array = np.array(dados, dtype=dtype)
@@ -102,11 +106,11 @@ def resolver_imagem(arquivo_xy, config=None):
     
     solve_cmd = encontrar_solve_field()
     if not solve_cmd:
-        return {'success': False, 'erro': 'solve-field não encontrado'}
+        return {'success': False, 'erro': 'solve-field nao encontrado'}
     
     xy_path = Path(arquivo_xy)
     if not xy_path.exists():
-        return {'success': False, 'erro': f'Arquivo .xy não encontrado: {arquivo_xy}'}
+        return {'success': False, 'erro': f'Arquivo .xy nao encontrado: {arquivo_xy}'}
     
     # Procura o arquivo .fits correspondente
     fits_path = None
@@ -117,28 +121,28 @@ def resolver_imagem(arquivo_xy, config=None):
             break
     
     if not fits_path or not fits_path.exists():
-        return {'success': False, 'erro': 'Arquivo .fits correspondente não encontrado'}
+        return {'success': False, 'erro': 'Arquivo .fits correspondente nao encontrado'}
     
     # Converte .xy para FITS
     try:
         axy_fits = converter_xy_para_fits(xy_path)
         if config.get('verbose', True):
-            print(f"  🔭 Resolvendo: {fits_path.name}")
+            print(f"  Resolvendo: {fits_path.name}")
             print(f"     Usando: {xy_path.name}")
-            print(f"     ✅ Convertido para: {axy_fits}")
+            print(f"     Convertido para: {axy_fits}")
     except Exception as e:
         return {'success': False, 'erro': f'Erro ao converter .xy para FITS: {e}'}
     
-    # Lista os índices
+    # Lista os indices
     indices = listar_indices(config['indices_dir'])
     if not indices:
-        return {'success': False, 'erro': f'Nenhum arquivo de índice encontrado em {config["indices_dir"]}'}
+        return {'success': False, 'erro': f'Nenhum arquivo de indice encontrado em {config["indices_dir"]}'}
     
     if config.get('verbose', True):
-        print(f"     Encontrados {len(indices)} arquivos de índice")
+        print(f"     Encontrados {len(indices)} arquivos de indice")
         print(f"     Escala: {config['scale_low']}° - {config['scale_high']}°")
     
-    # Cria arquivo de configuração temporário
+    # Cria arquivo de configuracao temporario
     with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
         config_path = f.name
         criar_arquivo_config(indices, config_path)
@@ -182,13 +186,13 @@ def resolver_imagem(arquivo_xy, config=None):
             pass
     
     if not Path(solved_file).exists():
-        return {'success': False, 'erro': 'Não foi possível resolver a imagem', 'saida': result.stdout + result.stderr}
+        return {'success': False, 'erro': 'Nao foi possivel resolver a imagem', 'saida': result.stdout + result.stderr}
     
     if config.get('verbose', True):
-        print(f"     ✅ Resolvido!")
+        print(f"     Resolvido!")
     
     if not Path(wcs_file).exists():
-        return {'success': False, 'erro': 'Arquivo WCS não encontrado'}
+        return {'success': False, 'erro': 'Arquivo WCS nao encontrado'}
     
     try:
         with fits.open(wcs_file) as hdul:
@@ -235,11 +239,11 @@ def resolver_imagem_direta(imagem_path, config=None):
     
     fits_path = Path(imagem_path)
     if not fits_path.exists():
-        return {'success': False, 'erro': f'Arquivo não encontrado: {imagem_path}'}
+        return {'success': False, 'erro': f'Arquivo nao encontrado: {imagem_path}'}
     
     indices = listar_indices(config['indices_dir'])
     if not indices:
-        return {'success': False, 'erro': 'Nenhum arquivo de índice encontrado'}
+        return {'success': False, 'erro': 'Nenhum arquivo de indice encontrado'}
     
     with tempfile.NamedTemporaryFile(mode='w', suffix='.cfg', delete=False) as f:
         config_path = f.name
@@ -280,7 +284,7 @@ def resolver_imagem_direta(imagem_path, config=None):
             pass
     
     if not Path(solved_file).exists():
-        return {'success': False, 'erro': 'Não foi possível resolver', 'saida': result.stdout + result.stderr}
+        return {'success': False, 'erro': 'Nao foi possivel resolver', 'saida': result.stdout + result.stderr}
     
     try:
         with fits.open(wcs_file) as hdul:

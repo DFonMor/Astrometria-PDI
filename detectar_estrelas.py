@@ -1,13 +1,13 @@
 """
-detectar_estrelas.py - Módulo para segmentação e detecção de estrelas
+detectar_estrelas.py - Modulo para segmentacao e deteccao de estrelas
 
-Este módulo é responsável pela detecção de estrelas usando a biblioteca photutils.
-Conceitos da disciplina: Segmentação, Morfologia Matemática, Extração de atributos.
+Este modulo e responsavel pela deteccao de estrelas usando a biblioteca photutils.
+Conceitos da disciplina: Segmentacao, Morfologia Matematica, Extracao de atributos.
 
 Funcionalidades:
     - Estimativa de fundo da imagem (Background2D)
-    - Detecção de estrelas com DAOStarFinder
-    - Extração de propriedades (centroide, fluxo, área)
+    - Deteccao de estrelas com DAOStarFinder
+    - Extracao de propriedades (centroide, fluxo, area)
 
 Autor: Eduardo Fonseca Morato
 Contato: morato@alunos.utfpr.edu.br
@@ -25,20 +25,20 @@ def detectar_estrelas(imagem, config=None):
     Detecta estrelas usando a biblioteca photutils (DAOStarFinder).
     
     Args:
-        imagem (numpy.ndarray): Imagem de entrada (pode ser normalizada ou não)
-        config (dict, optional): Parâmetros de configuração.
+        imagem (numpy.ndarray): Imagem de entrada (pode ser normalizada ou nao)
+        config (dict, optional): Parametros de configuracao.
     
     Returns:
-        list: Lista de dicionários, cada um contendo:
+        list: Lista de dicionarios, cada um contendo:
               - x (float): Coordenada x do centroide
               - y (float): Coordenada y do centroide
               - fluxo (float): Fluxo da estrela
-              - area (int): Número de pixels
+              - area (int): Numero de pixels
               - sharpness (float): Nitidez da estrela
               - roundness (float): Circularidade da estrela
     """
     
-    # Configurações padrão (baseadas nos testes)
+    # Configuracoes padrao (baseadas nos testes)
     if config is None:
         config = {
             'fwhm': 3.0,
@@ -63,7 +63,7 @@ def detectar_estrelas(imagem, config=None):
         fundo = bkg.background
         rms = bkg.background_rms
     except Exception as e:
-        # Fallback: usar estatísticas globais
+        # Fallback: usar estatisticas globais
         fundo = np.median(imagem)
         rms = mad_std(imagem)
     
@@ -80,7 +80,7 @@ def detectar_estrelas(imagem, config=None):
     imagem_sub = np.maximum(imagem_sub, 0)
     
     # ============================================================
-    # PASSO 3: Detecção de estrelas com DAOStarFinder
+    # PASSO 3: Deteccao de estrelas com DAOStarFinder
     # ============================================================
     daofind = DAOStarFinder(
         fwhm=config['fwhm'],
@@ -129,7 +129,7 @@ def detectar_estrelas(imagem, config=None):
         # Extrai fluxo
         fluxo = float(source['flux']) if 'flux' in colunas else 0
         
-        # Extrai área
+        # Extrai area
         area = int(source['n_pixels']) if 'n_pixels' in colunas else 0
         
         # Extrai qualidade
@@ -172,7 +172,7 @@ def salvar_estrelas_xy(estrelas, arquivo_saida):
 
 def exibir_info_deteccao(estrelas):
     """
-    Exibe informações sobre a detecção de estrelas (para debug).
+    Exibe informacoes sobre a deteccao de estrelas (para debug).
     """
     print(f"  Estrelas detectadas: {len(estrelas)}")
     
@@ -181,11 +181,11 @@ def exibir_info_deteccao(estrelas):
         areas = [s['area'] for s in estrelas[:10]]
         
         print(f"    Top 10 fluxos: {', '.join([f'{f:.1f}' for f in fluxos])}")
-        print(f"    Top 10 áreas: {', '.join([str(a) for a in areas])}")
+        print(f"    Top 10 areas: {', '.join([str(a) for a in areas])}")
         
         s = estrelas[0]
         print(f"    Mais brilhante: fluxo={s['fluxo']:.1f}, "
-              f"posição=({s['x']:.1f}, {s['y']:.1f}), área={s['area']}px")
+              f"posicao=({s['x']:.1f}, {s['y']:.1f}), area={s['area']}px")
 
 
 # ============================================================================
@@ -201,11 +201,11 @@ if __name__ == "__main__":
     
     if len(sys.argv) > 1:
         caminho_teste = sys.argv[1]
-        print(f"Testando detecção de estrelas com photutils: {caminho_teste}")
+        print(f"Testando deteccao de estrelas com photutils: {caminho_teste}")
         print("-" * 50)
         
         try:
-            # Carrega imagem (sem normalização para detecção)
+            # Carrega imagem (sem normalizacao para deteccao)
             img_raw, header = carregar_imagem(caminho_teste)
             
             # Detecta estrelas
@@ -217,10 +217,10 @@ if __name__ == "__main__":
                 # SALVA ESTRELAS NO FORMATO .XY (para o solve-field)
                 # ============================================================
                 salvar_estrelas_xy(estrelas, "teste.xy")
-                print(f"💾 Estrelas salvas em: teste.xy")
+                print(f"Estrelas salvas em: teste.xy")
                 
                 # ============================================================
-                # VISUALIZAÇÃO
+                # VISUALIZACAO
                 # ============================================================
                 img_vis = pre_processar(img_raw)
                 
@@ -250,12 +250,12 @@ if __name__ == "__main__":
                 plt.tight_layout()
                 plt.show()
                 
-                print("\n✅ Visualização concluída!")
+                print("Visualizacao concluida!")
             else:
-                print("⚠️ Nenhuma estrela detectada!")
+                print("Nenhuma estrela detectada!")
                 
         except Exception as e:
-            print(f"❌ Erro: {e}")
+            print(f"Erro: {e}")
             import traceback
             traceback.print_exc()
     else:

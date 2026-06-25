@@ -1,12 +1,12 @@
 """
-exibir_resultado.py - Módulo para exibição dos resultados
+exibir_resultado.py - Modulo para exibicao dos resultados
 
-Este módulo é responsável por exibir os resultados do pipeline de forma clara
-e organizada para o usuário.
+Este modulo e responsavel por exibir os resultados do pipeline de forma clara
+e organizada para o usuario.
 
 Funcionalidades:
-    - Exibir informações do plate solving (RA, Dec, campo)
-    - Exibir estatísticas da detecção de estrelas
+    - Exibir informacoes do plate solving (RA, Dec, campo)
+    - Exibir estatisticas da deteccao de estrelas
     - Exibir arquivos gerados
     - Exibir resumo do tempo de processamento
     - Exibir imagens
@@ -26,7 +26,7 @@ from io import BytesIO
 
 def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabecalho=None, tempo_total=None, config=None):
     """
-    Exibe os resultados do processamento com visualização gráfica.
+    Exibe os resultados do processamento com visualizacao grafica.
     """
     
     if config is None:
@@ -38,18 +38,18 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
         }
     
     # ============================================================
-    # 1. EXIBE INFORMAÇÕES NO CONSOLE
+    # 1. EXIBE INFORMACOES NO CONSOLE
     # ============================================================
     
     print(f"\n{'='*60}")
-    print("📊 RESULTADO DA ASTROMETRIA")
+    print("RESULTADO DA ASTROMETRIA")
     print(f"{'='*60}")
     
-    print(f"\n  ⭐ ESTRELAS DETECTADAS: {len(estrelas)}")
+    print(f"\n  ESTRELAS DETECTADAS: {len(estrelas)}")
     if estrelas:
         s_mais = estrelas[0]
-        print(f"     🌟 Mais brilhante: fluxo={s_mais['fluxo']:.1f}, "
-              f"posição=({s_mais['x']:.1f}, {s_mais['y']:.1f})px")
+        print(f"     Mais brilhante: fluxo={s_mais['fluxo']:.1f}, "
+              f"posicao=({s_mais['x']:.1f}, {s_mais['y']:.1f})px")
     
     # Coordenadas
     ra_header = cabecalho.get('RA') if cabecalho else None
@@ -57,32 +57,32 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     ra_solve = resultado_solve.get('ra') if resultado_solve.get('success') else None
     dec_solve = resultado_solve.get('dec') if resultado_solve.get('success') else None
     
-    print(f"\n  📍 COORDENADAS:")
+    print(f"\n  COORDENADAS:")
     if ra_header is not None and dec_header is not None:
-        print(f"     Cabeçalho (Seestar): RA={ra_header:.6f}°, Dec={dec_header:.6f}°")
+        print(f"     Cabecalho (Seestar): RA={ra_header:.6f}°, Dec={dec_header:.6f}°")
     else:
-        print(f"     Cabeçalho (Seestar): RA=Não disponível, Dec=Não disponível")
+        print(f"     Cabecalho (Seestar): RA=Nao disponivel, Dec=Nao disponivel")
     
     if ra_solve is not None and dec_solve is not None:
         print(f"     Resolvido (solve-field): RA={ra_solve:.6f}°, Dec={dec_solve:.6f}°")
         if ra_header is not None and dec_header is not None:
             diff_ra = (ra_solve - float(ra_header)) * 3600
             diff_dec = (dec_solve - float(dec_header)) * 3600
-            print(f"     Diferença: ΔRA={diff_ra:.2f}\", ΔDec={diff_dec:.2f}\"")
+            print(f"     Diferenca: RA={diff_ra:.2f}\", Dec={diff_dec:.2f}\"")
     else:
-        print(f"     Resolvido (solve-field): NÃO RESOLVIDO")
+        print(f"     Resolvido (solve-field): NAO RESOLVIDO")
     
     if resultado_solve.get('success', False):
-        print(f"\n  ✅ CAMPO IDENTIFICADO: {resultado_solve['objeto']}")
+        print(f"\n  CAMPO IDENTIFICADO: {resultado_solve['objeto']}")
         if resultado_solve.get('pixel_scale'):
-            print(f"  📐 Escala: {resultado_solve['pixel_scale']:.3f} \"/pixel")
+            print(f"  Escala: {resultado_solve['pixel_scale']:.3f} \"/pixel")
     else:
-        print(f"\n  ❌ IMAGEM NÃO RESOLVIDA")
+        print(f"\n  IMAGEM NAO RESOLVIDA")
         if 'erro' in resultado_solve:
             print(f"     Erro: {resultado_solve['erro']}")
     
     if tempo_total is not None:
-        print(f"\n  ⏱️ Tempo: {tempo_total:.2f} s")
+        print(f"\n  Tempo: {tempo_total:.2f} s")
     
     print(f"{'='*60}\n")
     
@@ -140,7 +140,7 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     
     caminho_figura = pasta_saida / f"{nome_base}_visualizacao.png"
     fig.savefig(caminho_figura, dpi=150, bbox_inches='tight', facecolor='black')
-    print(f"💾 Visualização salva em: {caminho_figura}")
+    print(f"Visualizacao salva em: {caminho_figura}")
     
     if img_original is not None:
         plt.imsave(pasta_saida / f"{nome_base}_original.png", img_orig_norm, cmap='gray', origin='lower', vmin=0, vmax=1)
@@ -148,7 +148,7 @@ def exibir_resultado(resultado_solve, estrelas, img_vis, img_original=None, cabe
     plt.imsave(pasta_saida / f"{nome_base}_melhorada.png", img_vis, cmap='gray', origin='lower')
     plt.imsave(pasta_saida / f"{nome_base}_estrelas.png", img_estrelas, origin='lower')
     
-    print(f"💾 Imagens individuais salvas em: {pasta_saida}")
+    print(f"Imagens individuais salvas em: {pasta_saida}")
     plt.close(fig)
 
 
