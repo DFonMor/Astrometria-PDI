@@ -1,5 +1,7 @@
 # Astrometria-PDI
 Projeto de algoritmo de astrometria com distância focal fixa.
+![Relatório](Relatório.pdf)
+![Apresentação](Apresentação.pdf)
 
 ## Objetivo 
 
